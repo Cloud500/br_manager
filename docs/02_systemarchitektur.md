@@ -98,17 +98,18 @@ br_manager/
 │   │   ├── development.py      # Entwicklungsumgebung
 │   │   ├── production.py       # Produktionsumgebung
 │   │   └── test.py             # Testumgebung
-│   ├── urls.py                 # Root-URL-Konfiguration
+│   ├── urls.py                 # Zentrale URL-Konfiguration
 │   ├── wsgi.py
 │   └── celery.py               # Celery-Konfiguration (optional)
 ├── apps/
 │   ├── accounts/               # Benutzerverwaltung & Authentifizierung
 │   │   ├── models.py
 │   │   ├── views.py
-│   │   ├── forms.py            # Django Forms
+│   │   ├── forms.py            # Django-Formulare
 │   │   ├── urls.py
 │   │   └── ...
-│   ├── committees/             # Gremien- & Ausschussverwaltung
+│   ├── committees/             # Gremienverwaltung
+│   ├── meetings/              # Sitzungsverwaltung (online/hybrid/Präsenz)
 │   ├── agendas/                # Tagesordnungsverwaltung
 │   ├── minutes/                # Protokollverwaltung
 │   ├── attendance/             # Anwesenheitsverwaltung
@@ -116,25 +117,30 @@ br_manager/
 │   ├── resolutions/            # Beschluss- & Abstimmungssystem
 │   ├── calendar_mgmt/          # Kalenderintegration
 │   ├── notifications/          # Benachrichtigungssystem
-│   ├── roles/                  # Dynamische Rollen- & Rechteverwaltung
+│   ├── roles/                  # Dynamische Rollen- & Berechtigungsverwaltung
+│   ├── todos/                  # Aufgabenverwaltung
+│   ├── personnel/              # Personelle Maßnahmen
 │   └── audit/                  # Audit-Logging
-├── templates/                  # Globale Django Templates
-│   ├── base.html               # Basis-Template (Layout, Navigation, HTMX-Einbindung)
+├── templates/                  # Globale Django-Templates
+│   ├── base.html               # Basis-Template (Layout, Navigation, HTMX-Integration)
 │   ├── components/             # Wiederverwendbare Template-Fragmente
 │   │   ├── _navbar.html
 │   │   ├── _sidebar.html
 │   │   ├── _modal.html
 │   │   ├── _pagination.html
 │   │   └── _messages.html
-│   ├── accounts/               # Account-Templates
+│   ├── accounts/               # Konto-Templates
 │   ├── agendas/                # Tagesordnungs-Templates
 │   ├── minutes/                # Protokoll-Templates
 │   ├── attendance/             # Anwesenheits-Templates
 │   ├── documents/              # Dokumenten-Templates
 │   ├── resolutions/            # Beschluss-Templates
-│   ├── committees/             # Ausschuss-Templates
+│   ├── meetings/               # Sitzungs-Templates
+│   ├── committees/             # Gremien-Templates
 │   ├── calendar_mgmt/          # Kalender-Templates
 │   ├── roles/                  # Rollen-Templates
+│   ├── todos/                  # Aufgaben-Templates
+│   ├── personnel/              # Personelle Maßnahmen-Templates
 │   └── emails/                 # E-Mail-Templates
 ├── static/                     # Statische Dateien
 │   ├── css/                    # Eigene Stylesheets
@@ -212,8 +218,8 @@ Benutzer-Aktion (Klick, Submit)
 
 ```python
 # views.py
-def agenda_item_edit(request, item_id):
-    item = get_object_or_404(AgendaItem, id=item_id)
+def agenda_item_edit(request, item_id: uuid.UUID):
+    item = get_object_or_404(AgendaItem, pk=item_id)
     if request.method == 'POST':
         form = AgendaItemForm(request.POST, instance=item)
         if form.is_valid():
@@ -267,9 +273,10 @@ Alpine.js wird für **clientseitige Interaktivität** eingesetzt, die keinen Ser
 Zeitintensive Aufgaben werden über **Celery** asynchron verarbeitet:
 
 - E-Mail-Versand (Einladungen, Benachrichtigungen)
-- PDF-Generierung (Protokolle, Tagesordnungen)
+- PDF-Generierung (Protokolle, Tagesordnungen, Beschluss-PDFs für Arbeitgeber)
 - Dokumentenkonvertierung
 - Geplante Aufgaben (z. B. automatische Tagesordnungspunkte für nächste Sitzung)
+- Fristenüberwachung (To-Dos, personelle Einzelmaßnahmen)
 
 Falls kein Redis/Celery gewünscht ist, können diese Aufgaben auch **synchron** im Request-Zyklus verarbeitet werden (für kleine Installationen ausreichend).
 

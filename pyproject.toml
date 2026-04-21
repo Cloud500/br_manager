@@ -1,5 +1,52 @@
 [project]
 name = "br-manager"
 version = "0.1.0"
+description = "Digitale Plattform zur Unterstützung der Betriebsratsarbeit – Sitzungen, Beschlüsse, Dokumente, Gremien und mehr."
 requires-python = ">=3.12"
-dependencies = []
+license = { file = "LICENSE" }
+readme = "README.md"
+keywords = [
+    "betriebsrat",
+    "django",
+    "betrvg",
+    "meetings",
+    "compliance",
+    "employee-representation",
+]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Framework :: Django",
+    "Framework :: Django :: 5.0",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: European Union Public Licence 1.2 (EUPL 1.2)",
+    "Natural Language :: German",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business",
+]
+
+[[project.authors]]
+name = "Christian Heinisch"
+email = "christian.heinisch@protonmail.com"
+
+
+[[project.maintainers]]
+name = "Christian Heinisch"
+email = "christian.heinisch@protonmail.com"
+
+[project.urls]
+Homepage = "https://github.com/example-org/br-manager"
+Documentation = "https://github.com/example-org/br-manager/tree/main/docs"
+Repository = "https://github.com/example-org/br-manager.git"
+Issues = "https://github.com/example-org/br-manager/issues"
+Changelog = "https://github.com/example-org/br-manager/blob/main/CHANGELOG.md"
+
+# --- Abhängigkeiten (Platzhalter – werden bei Implementierung ergänzt) ---
+dependencies = [
+]
+
+[project.optional-dependencies]
+dev = [
+]

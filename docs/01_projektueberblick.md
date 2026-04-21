@@ -14,6 +14,8 @@ Der BR Manager hat zum Ziel, die Arbeit von Betriebsräten vollständig digital 
 - Ein integriertes Dokumentenmanagementsystem (DMS) bereitstellen.
 - Die Einhaltung gesetzlicher Vorgaben (BetrVG, DSGVO) sicherstellen.
 - Die Zusammenarbeit zwischen Gremien, Ausschüssen und deren Mitgliedern verbessern.
+- Aufgaben (To-Dos) aus der Betriebsratsarbeit zentral verwalten.
+- Personelle Einzelmaßnahmen gemäß §§ 99–101 BetrVG mit Fristenüberwachung nachverfolgen.
 
 ## 1.3 Problemstellung
 
@@ -32,8 +34,8 @@ Die Betriebsratsarbeit ist in vielen Unternehmen noch stark papierbasiert oder d
 | **Betriebsratsvorsitzende/r** | Leitung des Betriebsrats | Effiziente Sitzungsführung, rechtssichere Dokumentation |
 | **Betriebsratsmitglieder** | Ordentliche Mitglieder des Gremiums | Einfacher Zugriff auf Dokumente, Abstimmungen, Termine |
 | **Ersatzmitglieder** | Stellvertretende Mitglieder | Zugriff auf relevante Daten während Einsatzzeit, Kalender |
-| **Protokollführung** | Verantwortlich für Sitzungsprotokolle | Einfache Protokollerstellung und Freigabe-Workflow |
-| **Ausschussmitglieder** | Mitglieder von Fachausschüssen | Separate Verwaltung, eigene Dokumente und Beschlüsse |
+| **Protokollführung** | Verantwortlich für Sitzungsprotokolle | Einfache Protokollerstellung, digitale Unterschrift und Freigabe-Workflow |
+| **Ausschussmitglieder** | Mitglieder von Fachausschüssen (inkl. externe Mitglieder) | Separate Verwaltung, eigene Dokumente und Beschlüsse |
 | **Gäste** | Zeitweise eingeladene Personen | Zeitbegrenzter Zugriff auf relevante Dokumente |
 | **IT-Administration** | Technische Betreuung | Wartbarkeit, Sicherheit, Deployment |
 | **Datenschutzbeauftragte/r** | DSGVO-Compliance | Datenschutzkonformität, Audit-Fähigkeit |
@@ -43,22 +45,27 @@ Die Betriebsratsarbeit ist in vielen Unternehmen noch stark papierbasiert oder d
 ### In Scope
 
 - Django-Monolith (Server-Side Rendering mit HTMX/Alpine.js, Responsive Webdesign)
+- Sitzungsverwaltung (Online, Hybrid, Präsenz) mit Vorsitz, Protokollführung und Vertretungen
 - Tagesordnungsverwaltung mit Vorlagen
 - Protokollverwaltung mit Freigabe-Workflow und Versionierung
-- Anwesenheitsverwaltung mit 2FA-Bestätigung und Ersatzmitglieder-Logik
+- Anwesenheitsverwaltung mit 2FA-Bestätigung und Ersatzmitglieder-Logik (Nachrückung nach Listenzugehörigkeit, Listenplatz und Geschlechterregelung gemäß § 25 BetrVG)
 - Dokumentenmanagementsystem (DMS) mit Versionierung und Zugriffssteuerung
-- Beschluss- und Abstimmungssystem
-- Ausschussverwaltung mit separaten Rechten
-- Kalenderintegration
+- Beschluss- und Abstimmungssystem (inkl. Beschluss-PDF-Versand an Arbeitgeber)
+- Wahlsystem (ausschließlich bei Präsenzsitzungen)
+- Ausschussverwaltung mit separaten Rechten und externen Ausschussmitgliedern
+- Kalenderintegration (inkl. Reisedaten)
 - E-Mail-Benachrichtigungen
+- To-Do-Verwaltung
+- Personelle Einzelmaßnahmen mit Fristenüberwachung
 - Dynamische, konfigurierbare Rollen- und Rechteverwaltung
+- Digitale Unterschriften für Protokoll-Freigabeprozess
 - Audit-Logging
 - BetrVG- und DSGVO-konforme Umsetzung
 
 ### Out of Scope (Mitgedacht ohne Umsetzung)
 - Integration in HR-Systeme (SAP, Workday etc.)
 - Videokonferenz-Integration
-- Öffentliche Betriebsversammlungs-Funktionalität
+- Monatsgespräche mit Vorstand/Geschäftsführung
 
 ## 1.6 Erfolgskriterien
 
