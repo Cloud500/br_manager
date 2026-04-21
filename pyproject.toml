@@ -43,7 +43,6 @@ Repository = "https://github.com/example-org/br-manager.git"
 Issues = "https://github.com/example-org/br-manager/issues"
 Changelog = "https://github.com/example-org/br-manager/blob/main/CHANGELOG.md"
 
-# --- Abhängigkeiten (Platzhalter – werden bei Implementierung ergänzt) ---
 dependencies = [
 ]
 
