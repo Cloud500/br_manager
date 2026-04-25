@@ -6,14 +6,15 @@ Contains all shared configuration used across all environments
 override values defined here.
 """
 
-import os
 from pathlib import Path
+
+from .env_config import settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "CHANGE-ME-IN-PRODUCTION")
+SECRET_KEY = settings.django_secret_key
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS = settings.django_allowed_hosts
 
 # ---------------------------------------------------------------------------
 # Application definition
@@ -77,11 +78,11 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "br_manager"),
-        "USER": os.environ.get("DB_USER", "br_manager"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "br_manager"),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
+        "NAME": settings.db_name,
+        "USER": settings.db_user,
+        "PASSWORD": settings.db_password,
+        "HOST": settings.db_host,
+        "PORT": settings.db_port,
     }
 }
 
@@ -139,15 +140,13 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 # ---------------------------------------------------------------------------
 # Email (default: console in development mode)
 # ---------------------------------------------------------------------------
-EMAIL_BACKEND = os.environ.get(
-    "DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
-)
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() == "true"
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@br-manager.local")
+EMAIL_BACKEND = settings.django_email_backend
+EMAIL_HOST = settings.email_host
+EMAIL_PORT = settings.email_port
+EMAIL_USE_TLS = settings.email_use_tls
+EMAIL_HOST_USER = settings.email_host_user
+EMAIL_HOST_PASSWORD = settings.email_host_password
+DEFAULT_FROM_EMAIL = settings.default_from_email
 
 # ---------------------------------------------------------------------------
 # Session configuration

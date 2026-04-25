@@ -5,15 +5,15 @@ Enforces strict security headers, HTTPS, HSTS and uses
 WhiteNoise for compressed static file serving.
 """
 
-import os
-
 from .base import *  # noqa: F401,F403
+from .env_config import settings
+from .logging_config import setup_logging
 
 DEBUG = False
 
-SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
+SECRET_KEY = settings.django_secret_key
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+ALLOWED_HOSTS = settings.django_allowed_hosts
 
 # ---------------------------------------------------------------------------
 # Security-Header
@@ -34,32 +34,29 @@ STORAGES = {
 }
 
 # ---------------------------------------------------------------------------
-# Logging
+# Logging – using loguru
 # ---------------------------------------------------------------------------
+# Initialize loguru logging
+setup_logging()
+
+# Django logging configuration to intercept Django's logging and redirect to loguru
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "{levelname} {asctime} {module} {message}",
-            "style": "{",
-        },
-    },
     "handlers": {
-        "file": {
-            "level": "WARNING",
-            "class": "logging.FileHandler",
-            "filename": os.environ.get("DJANGO_LOG_FILE", "/var/log/br_manager/django.log"),
-            "formatter": "verbose",
-        },
         "console": {
-            "level": "INFO",
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
         },
     },
     "root": {
-        "handlers": ["console", "file"],
-        "level": "INFO",
+        "handlers": ["console"],
+        "level": settings.log_level,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": settings.log_level,
+            "propagate": False,
+        },
     },
 }
