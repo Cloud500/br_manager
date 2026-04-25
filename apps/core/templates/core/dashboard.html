@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </h1>
+        <p class="lead">Willkommen, {{ user.get_full_name }}!</p>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <!-- Sitzungen Card -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-calendar-event text-primary"></i> Sitzungen
+                </h5>
+                <p class="card-text">Verwalten Sie Sitzungen und Termine.</p>
+                <a href="#" class="btn btn-primary">
+                    <i class="bi bi-arrow-right"></i> Zu Sitzungen
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Protokolle Card -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-file-earmark-text text-success"></i> Protokolle
+                </h5>
+                <p class="card-text">Erstellen und verwalten Sie Protokolle.</p>
+                <a href="#" class="btn btn-success">
+                    <i class="bi bi-arrow-right"></i> Zu Protokollen
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dokumente Card -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-folder text-warning"></i> Dokumente
+                </h5>
+                <p class="card-text">Zugriff auf alle Dokumente und Dateien.</p>
+                <a href="#" class="btn btn-warning">
+                    <i class="bi bi-arrow-right"></i> Zu Dokumenten
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

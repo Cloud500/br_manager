@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %}Rolle löschen - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> Rolle löschen
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger">
+                    <p><strong>Achtung:</strong> Sie sind dabei, die folgende Rolle zu löschen:</p>
+                    <p class="mb-0">
+                        <strong>{{ object.name }}</strong> ({{ object.codename }})<br>
+                        <small class="text-muted">{{ object.get_role_type_display }}</small>
+                    </p>
+                </div>
+                
+                <p>Diese Aktion kann nicht rückgängig gemacht werden.</p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Rolle löschen
+                        </button>
+                        <a href="{% url 'roles:role_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

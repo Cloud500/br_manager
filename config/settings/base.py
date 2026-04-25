@@ -36,6 +36,8 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "apps.core",
+    "apps.accounts",
+    "apps.roles",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -50,6 +52,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
+    "apps.accounts.middleware.Require2FAMiddleware",  # Enforce 2FA for admins
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -89,7 +92,7 @@ DATABASES = {
 # ---------------------------------------------------------------------------
 # Custom User Model
 # ---------------------------------------------------------------------------
-# AUTH_USER_MODEL = "accounts.User"
+AUTH_USER_MODEL = "accounts.User"
 
 # ---------------------------------------------------------------------------
 # Password validation
@@ -164,3 +167,23 @@ CSRF_COOKIE_SECURE = True
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# ---------------------------------------------------------------------------
+# Authentication & Login
+# ---------------------------------------------------------------------------
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
+
+# ---------------------------------------------------------------------------
+# Two-Factor Authentication (2FA)
+# ---------------------------------------------------------------------------
+TOTP_ISSUER = "BR-Manager"
+TOTP_TOLERANCE = 1  # ±30 seconds
+RECOVERY_CODES_COUNT = 10
+
+# ---------------------------------------------------------------------------
+# Email Configuration
+# ---------------------------------------------------------------------------
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # Development
+DEFAULT_FROM_EMAIL = "noreply@br-manager.local"

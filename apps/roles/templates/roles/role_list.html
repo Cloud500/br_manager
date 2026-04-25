@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+
+{% block title %}Rollenverwaltung - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <h1><i class="bi bi-shield"></i> Rollenverwaltung</h1>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="{% url 'roles:role_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Neue Rolle erstellen
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-3">
+    <div class="col-md-6">
+        <form method="get" class="d-flex">
+            <input type="text" 
+                   name="search" 
+                   class="form-control me-2" 
+                   placeholder="Suche nach Name oder Code..." 
+                   value="{{ search }}">
+            <button type="submit" class="btn btn-secondary">
+                <i class="bi bi-search"></i> Suchen
+            </button>
+        </form>
+    </div>
+    <div class="col-md-6">
+        <form method="get">
+            <select name="type" class="form-select" onchange="this.form.submit()">
+                <option value="">Alle Typen</option>
+                {% for value, label in role_types %}
+                    <option value="{{ value }}" {% if value == role_type %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+</div>
+
+<!-- Roles Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Codename</th>
+                        <th>Typ</th>
+                        <th>System-Rolle</th>
+                        <th>Berechtigungen</th>
+                        <th>Erstellt am</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for role in roles %}
+                    <tr>
+                        <td>
+                            <strong>{{ role.name }}</strong>
+                            {% if role.description %}
+                                <br><small class="text-muted">{{ role.description|truncatewords:10 }}</small>
+                            {% endif %}
+                        </td>
+                        <td><code>{{ role.codename }}</code></td>
+                        <td>
+                            {% if role.role_type == 'SYSTEM' %}
+                                <span class="badge bg-primary">{{ role.get_role_type_display }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ role.get_role_type_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if role.is_system_role %}
+                                <i class="bi bi-lock text-warning" title="System-Rolle (nicht löschbar)"></i>
+                            {% else %}
+                                <i class="bi bi-unlock text-muted" title="Benutzerdefinierte Rolle"></i>
+                            {% endif %}
+                        </td>
+                        <td>{{ role.permissions.count }}</td>
+                        <td>{{ role.created_at|date:"d.m.Y" }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'roles:role_permissions' role.pk %}" 
+                                   class="btn btn-sm btn-outline-primary"
+                                   title="Berechtigungen">
+                                    <i class="bi bi-key"></i>
+                                </a>
+                                <a href="{% url 'roles:role_update' role.pk %}" 
+                                   class="btn btn-sm btn-outline-secondary"
+                                   title="Bearbeiten">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% if not role.is_system_role %}
+                                <a href="{% url 'roles:role_delete' role.pk %}" 
+                                   class="btn btn-sm btn-outline-danger"
+                                   title="Löschen">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            Keine Rollen gefunden.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

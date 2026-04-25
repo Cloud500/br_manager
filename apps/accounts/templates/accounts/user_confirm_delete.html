@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block title %}Benutzer deaktivieren - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> Benutzer deaktivieren
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <p><strong>Achtung:</strong> Sie sind dabei, den folgenden Benutzer zu deaktivieren:</p>
+                    <p class="mb-0">
+                        <strong>{{ object.get_full_name }}</strong><br>
+                        <small class="text-muted">{{ object.email }}</small>
+                    </p>
+                </div>
+                
+                <p>
+                    Der Benutzer wird nicht gelöscht, sondern nur deaktiviert und kann sich nicht mehr anmelden.
+                    Sie können den Benutzer später wieder aktivieren.
+                </p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-shield-x"></i> Benutzer deaktivieren
+                        </button>
+                        <a href="{% url 'accounts:user_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

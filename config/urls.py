@@ -12,6 +12,9 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("accounts/", include("apps.accounts.urls", namespace="accounts")),
+    path("roles/", include("apps.roles.urls", namespace="roles")),
     path("", include("apps.core.urls", namespace="core")),
 ]
 

@@ -1,0 +1,133 @@
+{% extends 'base.html' %}
+
+{% block title %}Recovery Codes - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-key"></i> 2FA Recovery-Codes
+                </h4>
+            </div>
+            <div class="card-body">
+                {% if recovery_codes %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Wichtig:</strong> Speichern Sie diese Codes an einem sicheren Ort!
+                        Sie werden nur einmal angezeigt.
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <p class="mb-0">
+                            Diese Codes können verwendet werden, wenn Sie keinen Zugriff auf Ihre
+                            Authenticator-App haben. Jeder Code kann nur einmal verwendet werden.
+                        </p>
+                    </div>
+                    
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <div class="row">
+                                {% for code in recovery_codes %}
+                                <div class="col-md-6 mb-2">
+                                    <code class="fs-5">{{ code }}</code>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3 d-grid gap-2">
+                        <button type="button" class="btn btn-primary" onclick="downloadCodes()">
+                            <i class="bi bi-download"></i> Codes herunterladen
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="printCodes()">
+                            <i class="bi bi-printer"></i> Codes drucken
+                        </button>
+                        <a href="{% url 'core:dashboard' %}" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> Fertig
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <p>
+                            <strong>Recovery-Codes verwalten</strong><br>
+                            Sie haben derzeit <strong>{{ available_count }}</strong> verfügbare Recovery-Codes.
+                        </p>
+                    </div>
+                    
+                    {% if available_count <= 2 %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Warnung: Nur noch {{ available_count }} Codes verfügbar!
+                        Generieren Sie neue Codes.
+                    </div>
+                    {% endif %}
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-arrow-clockwise"></i> Neue Recovery-Codes generieren
+                            </button>
+                            <a href="{% url 'accounts:profile' %}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Zurück zum Profil
+                            </a>
+                        </div>
+                    </form>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <small>
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Hinweis:</strong> Beim Generieren neuer Codes werden alle alten Codes ungültig.
+                        </small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if recovery_codes %}
+<script>
+    function downloadCodes() {
+        const codes = {{ recovery_codes_json|safe }};
+        const content = 'BR-Manager 2FA Recovery Codes\n' +
+                       'Erstellt: ' + new Date().toLocaleString('de-DE') + '\n' +
+                       '\n' +
+                       codes.join('\n') +
+                       '\n\nSpeichern Sie diese Codes an einem sicheren Ort!';
+        
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'br-manager-recovery-codes.txt';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+    
+    function printCodes() {
+        const codes = {{ recovery_codes_json|safe }};
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write('<html><head><title>Recovery Codes</title>');
+        printWindow.document.write('<style>body { font-family: monospace; padding: 20px; }</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write('<h2>BR-Manager 2FA Recovery Codes</h2>');
+        printWindow.document.write('<p>Erstellt: ' + new Date().toLocaleString('de-DE') + '</p>');
+        printWindow.document.write('<ul>');
+        codes.forEach(code => {
+            printWindow.document.write('<li><strong>' + code + '</strong></li>');
+        });
+        printWindow.document.write('</ul>');
+        printWindow.document.write('<p><em>Speichern Sie diese Codes an einem sicheren Ort!</em></p>');
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.print();
+    }
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Berechtigungen verwalten - {{ role.name }} - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-key"></i> Berechtigungen für "{{ role.name }}"
+                </h4>
+            </div>
+            <div class="card-body">
+                {% if role.is_system_role %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Dies ist eine System-Rolle. Ändern Sie Berechtigungen mit Vorsicht.
+                    </div>
+                {% endif %}
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {% for category, perms in permissions_by_category.items %}
+                    <div class="mb-4">
+                        <h5 class="border-bottom pb-2">
+                            <i class="bi bi-folder"></i> {{ category|title }}
+                        </h5>
+                        <div class="row">
+                            {% for perm in perms %}
+                            <div class="col-md-6 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           name="permissions" 
+                                           value="{{ perm.id }}"
+                                           id="perm_{{ perm.id }}"
+                                           {% if perm.id in role_permissions %}checked{% endif %}>
+                                    <label class="form-check-label" for="perm_{{ perm.id }}">
+                                        <strong>{{ perm.name }}</strong>
+                                        <br><small class="text-muted">{{ perm.codename }}</small>
+                                        {% if perm.description %}
+                                            <br><small class="text-muted">{{ perm.description|truncatewords:15 }}</small>
+                                        {% endif %}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check"></i> Berechtigungen speichern
+                        </button>
+                        <a href="{% url 'roles:role_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Zurück zur Liste
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
