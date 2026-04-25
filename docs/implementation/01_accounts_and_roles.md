@@ -1,4 +1,4 @@
-# Implementierungsplan: Accounts & Roles Apps (Clean Version)
+# Implementierungsplan: Accounts & Roles Apps
 
 ## Übersicht
 
