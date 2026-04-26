@@ -391,14 +391,14 @@ class MemberEditView(
         return kwargs
     
     def get_success_url(self) -> str:
-        """Redirect to member list."""
+        """Redirect to committee detail."""
         messages.success(
             self.request,
             f'Mitgliedschaft von {self.object.user.get_full_name()} wurde aktualisiert.'
         )
         return reverse(
-            'committees:member_list',
-            kwargs={'committee_id': self.get_committee().pk}
+            'committees:committee_detail',
+            kwargs={'pk': self.get_committee().pk}
         )
 
 
