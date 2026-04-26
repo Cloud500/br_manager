@@ -1,0 +1,37 @@
+{
+  "_comment": "Smaller test configuration",
+  
+  "users": {
+    "male_count": 3,
+    "female_count": 2,
+    "guest_count": 1
+  },
+  
+  "main_committee": {
+    "name": "Betriebsrat",
+    "total_seats": 3,
+    "minority_gender": "F",
+    "minority_min_count": 1,
+    
+    "election_lists": [
+      {
+        "name": "Liste 1",
+        "user_count": 3,
+        "seats_in_committee": 2
+      },
+      {
+        "name": "Liste 2",
+        "user_count": 2,
+        "seats_in_committee": 1
+      }
+    ]
+  },
+  
+  "subcommittees": [
+    {
+      "name": "Wirtschaftsausschuss",
+      "member_count": 2,
+      "external_count": 1
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "_comment": "Test configuration for seed_testdata command",
+  
+  "users": {
+    "male_count": 22,
+    "female_count": 31,
+    "guest_count": 4
+  },
+  
+  "main_committee": {
+    "name": "Betriebsrat",
+    "total_seats": 17,
+    "minority_gender": "M",
+    "minority_min_count": 7,
+    
+    "election_lists": [
+      {
+        "name": "Liste 1",
+        "user_count": 7,
+        "seats_in_committee": 2
+      },
+      {
+        "name": "Liste 2",
+        "user_count": 25,
+        "seats_in_committee": 7
+      },
+      {
+        "name": "Liste 3",
+        "user_count": 21,
+        "seats_in_committee": 8
+      }
+    ]
+  },
+  
+  "subcommittees": [
+    {
+      "name": "Wirtschaftsausschuss",
+      "member_count": 3,
+      "external_count": 4
+    },
+        {
+      "name": "Betriebsausschuss",
+      "member_count": 7,
+      "external_count": 0
+    },
+    {
+      "name": "Personalausschuss",
+      "member_count": 7,
+      "external_count": 0
+    },
+    {
+      "name": "Arbeitsschutzausschuss",
+      "member_count": 7,
+      "external_count": 0
+    },
+    {
+      "name": "Gleichstellungsausschuss",
+      "member_count": 7,
+      "external_count": 0
+    }
+  ]
+}

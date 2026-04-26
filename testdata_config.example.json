@@ -1,0 +1,57 @@
+{
+  "_comment": "Beispiel-Konfiguration für seed_testdata Command. Kopiere zu testdata_config.json und passe die Werte an",
+  
+  "users": {
+    "male_count": 12,
+    "female_count": 8,
+    "guest_count": 3
+  },
+  
+  "main_committee": {
+    "name": "Betriebsrat",
+    "total_seats": 9,
+    "minority_gender": "F",
+    "minority_min_count": 3,
+    
+    "election_lists": [
+      {
+        "name": "Liste 1 - Gewerkschaft",
+        "user_count": 5,
+        "seats_in_committee": 4
+      },
+      {
+        "name": "Liste 2 - Unabhängige",
+        "user_count": 8,
+        "seats_in_committee": 3
+      },
+      {
+        "name": "Liste 3 - Alternative",
+        "user_count": 7,
+        "seats_in_committee": 2
+      }
+    ]
+  },
+  
+  "subcommittees": [
+    {
+      "name": "Wirtschaftsausschuss",
+      "member_count": 4,
+      "external_count": 1
+    },
+    {
+      "name": "Personalausschuss",
+      "member_count": 5,
+      "external_count": 0
+    },
+    {
+      "name": "Arbeitsschutzausschuss",
+      "member_count": 6,
+      "external_count": 1
+    },
+    {
+      "name": "Gleichstellungsausschuss",
+      "member_count": 4,
+      "external_count": 0
+    }
+  ]
+}
