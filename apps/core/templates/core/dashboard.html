@@ -13,17 +13,33 @@
 </div>
 
 <div class="row g-4 mt-2">
+    <!-- Gremien Card -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-people-fill text-primary"></i> Gremien
+                </h5>
+                <p class="card-text">Verwalten Sie Betriebsrat und Ausschüsse.</p>
+                <a href="{% url 'committees:committee_list' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-right"></i> Zu Gremien
+                </a>
+            </div>
+        </div>
+    </div>
+
     <!-- Sitzungen Card -->
     <div class="col-md-4">
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">
-                    <i class="bi bi-calendar-event text-primary"></i> Sitzungen
+                    <i class="bi bi-calendar-event text-success"></i> Sitzungen
                 </h5>
                 <p class="card-text">Verwalten Sie Sitzungen und Termine.</p>
-                <a href="#" class="btn btn-primary">
+                <a href="#" class="btn btn-success disabled">
                     <i class="bi bi-arrow-right"></i> Zu Sitzungen
                 </a>
+                <small class="text-muted d-block mt-2">Coming soon</small>
             </div>
         </div>
     </div>
@@ -33,12 +49,13 @@
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">
-                    <i class="bi bi-file-earmark-text text-success"></i> Protokolle
+                    <i class="bi bi-file-earmark-text text-info"></i> Protokolle
                 </h5>
                 <p class="card-text">Erstellen und verwalten Sie Protokolle.</p>
-                <a href="#" class="btn btn-success">
+                <a href="#" class="btn btn-info disabled">
                     <i class="bi bi-arrow-right"></i> Zu Protokollen
                 </a>
+                <small class="text-muted d-block mt-2">Coming soon</small>
             </div>
         </div>
     </div>
@@ -51,9 +68,42 @@
                     <i class="bi bi-folder text-warning"></i> Dokumente
                 </h5>
                 <p class="card-text">Zugriff auf alle Dokumente und Dateien.</p>
-                <a href="#" class="btn btn-warning">
+                <a href="#" class="btn btn-warning disabled">
                     <i class="bi bi-arrow-right"></i> Zu Dokumenten
                 </a>
+                <small class="text-muted d-block mt-2">Coming soon</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Beschlüsse Card -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-check-circle text-success"></i> Beschlüsse
+                </h5>
+                <p class="card-text">Verwaltung von Beschlüssen und Anträgen.</p>
+                <a href="#" class="btn btn-secondary disabled">
+                    <i class="bi bi-arrow-right"></i> Zu Beschlüssen
+                </a>
+                <small class="text-muted d-block mt-2">Coming soon</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aufgaben Card -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-list-check text-danger"></i> Aufgaben
+                </h5>
+                <p class="card-text">To-Do-Listen und Aufgabenverwaltung.</p>
+                <a href="#" class="btn btn-secondary disabled">
+                    <i class="bi bi-arrow-right"></i> Zu Aufgaben
+                </a>
+                <small class="text-muted d-block mt-2">Coming soon</small>
             </div>
         </div>
     </div>
