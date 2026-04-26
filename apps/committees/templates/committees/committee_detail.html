@@ -132,6 +132,8 @@
                                         <br/>
                                         <small class="text-muted">
                                             {{ membership.user.profile.department }}
+                                        -
+                                        {{ membership.user.gender }}
                                         </small>
                                     {% endif %}
                                 </div>
@@ -144,9 +146,9 @@
                                        class="btn btn-sm btn-outline-secondary" title="Bearbeiten">
                                         <i class="bi bi-pencil"></i>
                                     </a>
-                                    <a href="{% url 'committees:member_remove' committee.pk membership.pk %}" 
-                                       class="btn btn-sm btn-outline-danger" title="Entfernen">
-                                        <i class="bi bi-trash"></i>
+                                    <a href="{% url 'committees:member_replace' committee.pk membership.pk %}" 
+                                       class="btn btn-sm btn-outline-danger" title="Ersetzen/Entfernen">
+                                        <i class="bi bi-arrow-repeat"></i>
                                     </a>
                                     {% endif %}
                                 </div>
