@@ -124,6 +124,11 @@ class Role(models.Model):
         verbose_name='System-Rolle',
         help_text='Standard-Rollen können nicht gelöscht werden'
     )
+    sort_order = models.IntegerField(
+        default=100,
+        verbose_name='Sortierreihenfolge',
+        help_text='Niedrigere Werte = höhere Priorität (z.B. Vorsitz=1, Stellv.=2, etc.)'
+    )
     created_at = models.DateTimeField(
         default=timezone.now,
         verbose_name='Erstellt am'
@@ -151,7 +156,7 @@ class Role(models.Model):
     class Meta:
         verbose_name = 'Rolle'
         verbose_name_plural = 'Rollen'
-        ordering = ['role_type', 'name']
+        ordering = ['sort_order', 'name']
     
     def __str__(self) -> str:
         """String representation."""

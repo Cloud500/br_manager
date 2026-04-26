@@ -351,6 +351,8 @@ class Command(BaseCommand):
         # Get required roles
         try:
             chair_role = Role.objects.get(codename='CHAIR')
+            vice_chair_role = Role.objects.get(codename='VICE_CHAIR')
+            clerk_role = Role.objects.get(codename='CLERK')
             member_role = Role.objects.get(codename='MEMBER')
             substitute_role = Role.objects.get(codename='SUBSTITUTE')
             external_role = Role.objects.get(codename='EXTERNAL_MEMBER')
@@ -401,6 +403,7 @@ class Command(BaseCommand):
         # 3. Assign users to election lists and create memberships
         assigned_users = []
         list_assignments = {}  # Track which users are on which list
+        seat_counter = 0  # Track how many seats have been filled
         
         for list_cfg in committee_cfg["election_lists"]:
             list_name = list_cfg["name"]
@@ -421,8 +424,19 @@ class Command(BaseCommand):
                 
                 # First N users from this list become regular members
                 if i < seats_in_committee:
-                    # First user on first list becomes chair
-                    role = chair_role if len(assigned_users) == 0 else member_role
+                    # Assign special roles for first three members overall
+                    if seat_counter == 0:
+                        role = chair_role
+                        role_name = "chair"
+                    elif seat_counter == 1:
+                        role = vice_chair_role
+                        role_name = "vice chair"
+                    elif seat_counter == 2:
+                        role = clerk_role
+                        role_name = "clerk"
+                    else:
+                        role = member_role
+                        role_name = None
                     
                     RegularMembershipFactory.create(
                         user=user,
@@ -433,10 +447,11 @@ class Command(BaseCommand):
                         election_votes=votes
                     )
                     assigned_users.append(user)
+                    seat_counter += 1
                     
-                    if role == chair_role:
+                    if role_name:
                         self.stdout.write(
-                            self.style.SUCCESS(f"[OK] Assigned chair: {user.get_full_name()} ({list_name})")
+                            self.style.SUCCESS(f"[OK] Assigned {role_name}: {user.get_full_name()} ({list_name})")
                         )
                 else:
                     # Others become substitutes
@@ -499,11 +514,21 @@ class Command(BaseCommand):
                         members_for_this_subcommittee.append(all_main_members[member_index % len(all_main_members)])
                         member_index += 1
                 
-                for membership in members_for_this_subcommittee:
+                # Assign roles: first = chair, second = vice chair, third = clerk, rest = member
+                for idx, membership in enumerate(members_for_this_subcommittee):
+                    if idx == 0:
+                        role = chair_role
+                    elif idx == 1:
+                        role = vice_chair_role
+                    elif idx == 2:
+                        role = clerk_role
+                    else:
+                        role = member_role
+                    
                     RegularMembershipFactory.create(
                         user=membership.user,
                         committee=subcommittee,
-                        role=member_role,
+                        role=role,
                         election_list_name='',
                         election_list_position=None,
                         election_votes=None
@@ -570,6 +595,8 @@ class Command(BaseCommand):
         # Get default roles
         try:
             chair_role = Role.objects.get(codename='CHAIR')
+            vice_chair_role = Role.objects.get(codename='VICE_CHAIR')
+            clerk_role = Role.objects.get(codename='CLERK')
             member_role = Role.objects.get(codename='MEMBER')
             substitute_role = Role.objects.get(codename='SUBSTITUTE')
             external_role = Role.objects.get(codename='EXTERNAL_MEMBER')
@@ -634,9 +661,37 @@ class Command(BaseCommand):
             self.style.SUCCESS(f"[OK] Assigned chair: {chair_user.get_full_name()}")
         )
         
-        # Assign regular members (next 8 users for 9-seat committee)
+        # Assign vice chair (second user)
+        vice_chair_user = available_users[1]
+        RegularMembershipFactory.create(
+            user=vice_chair_user,
+            committee=main_committee,
+            role=vice_chair_role,
+            election_list_name='Liste 2',
+            election_list_position=1,
+            election_votes=420
+        )
+        self.stdout.write(
+            self.style.SUCCESS(f"[OK] Assigned vice chair: {vice_chair_user.get_full_name()}")
+        )
+        
+        # Assign clerk (third user)
+        clerk_user = available_users[2]
+        RegularMembershipFactory.create(
+            user=clerk_user,
+            committee=main_committee,
+            role=clerk_role,
+            election_list_name='Liste 1',
+            election_list_position=2,
+            election_votes=400
+        )
+        self.stdout.write(
+            self.style.SUCCESS(f"[OK] Assigned clerk: {clerk_user.get_full_name()}")
+        )
+        
+        # Assign regular members (next users to fill remaining seats)
         election_lists = ['Liste 1', 'Liste 2', 'Liste 3']
-        for i, user in enumerate(available_users[1:9], start=2):
+        for i, user in enumerate(available_users[3:main_committee.total_seats], start=3):
             list_name = random.choice(election_lists)
             RegularMembershipFactory.create(
                 user=user,
@@ -678,19 +733,29 @@ class Command(BaseCommand):
         
         # 5. Assign members to subcommittees
         for subcommittee in subcommittees:
-            # Use members from main committee + external experts
-            main_members = list(main_committee.get_active_members()[:subcommittee.total_seats - 1])
+            # Use members from main committee
+            main_members = list(main_committee.get_active_members()[:subcommittee.total_seats])
             
-            for membership in main_members:
+            for idx, membership in enumerate(main_members):
                 # Check if user already has membership in this subcommittee
                 if not Membership.objects.filter(
                     user=membership.user,
                     committee=subcommittee
                 ).exists():
+                    # Assign roles: first = chair, second = vice chair, third = clerk, rest = member
+                    if idx == 0:
+                        role = chair_role
+                    elif idx == 1:
+                        role = vice_chair_role
+                    elif idx == 2:
+                        role = clerk_role
+                    else:
+                        role = member_role
+                    
                     RegularMembershipFactory.create(
                         user=membership.user,
                         committee=subcommittee,
-                        role=member_role,
+                        role=role,
                         election_list_name=membership.election_list_name,
                         election_list_position=1,
                         election_votes=membership.election_votes

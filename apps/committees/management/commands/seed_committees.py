@@ -90,6 +90,8 @@ class Command(BaseCommand):
         # Get roles
         try:
             chair_role = Role.objects.get(codename='CHAIR')
+            vice_chair_role = Role.objects.get(codename='VICE_CHAIR')
+            clerk_role = Role.objects.get(codename='CLERK')
             member_role = Role.objects.get(codename='MEMBER')
             substitute_role = Role.objects.get(codename='SUBSTITUTE')
             external_role = Role.objects.get(codename='EXTERNAL_MEMBER')
@@ -156,11 +158,43 @@ class Command(BaseCommand):
             )
         )
         
+        # 4b. Assign vice chair
+        vice_chair_user = users[1]
+        RegularMembershipFactory.create(
+            user=vice_chair_user,
+            committee=main_committee,
+            role=vice_chair_role,
+            election_list_name='Liste 2',
+            election_list_position=1,
+            election_votes=450
+        )
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'[OK] Assigned vice chair: {vice_chair_user.get_full_name()}'
+            )
+        )
+        
+        # 4c. Assign clerk
+        clerk_user = users[2]
+        RegularMembershipFactory.create(
+            user=clerk_user,
+            committee=main_committee,
+            role=clerk_role,
+            election_list_name='Liste 1',
+            election_list_position=2,
+            election_votes=420
+        )
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'[OK] Assigned clerk: {clerk_user.get_full_name()}'
+            )
+        )
+        
         # 5. Assign regular members to main committee
         election_lists = ['Liste 1', 'Liste 2', 'Liste 3', 'Gewerkschaftsliste']
         regular_count = min(main_committee.total_seats, len(users))
         
-        for i, user in enumerate(users[1:regular_count], start=2):
+        for i, user in enumerate(users[3:regular_count], start=3):
             list_name = random.choice(election_lists)
             RegularMembershipFactory.create(
                 user=user,
@@ -208,16 +242,53 @@ class Command(BaseCommand):
             # Select random members from main committee
             selected_members = random.sample(
                 main_members,
-                min(subcommittee.total_seats - 1, len(main_members))
+                min(subcommittee.total_seats, len(main_members))
             )
             
-            for membership in selected_members:
+            # First member becomes chair
+            if selected_members:
+                chair_membership = selected_members[0]
+                RegularMembershipFactory.create(
+                    user=chair_membership.user,
+                    committee=subcommittee,
+                    role=chair_role,
+                    election_list_name=chair_membership.election_list_name,
+                    election_list_position=1,
+                    election_votes=chair_membership.election_votes
+                )
+            
+            # Second member becomes vice chair (if available)
+            if len(selected_members) > 1:
+                vice_chair_membership = selected_members[1]
+                RegularMembershipFactory.create(
+                    user=vice_chair_membership.user,
+                    committee=subcommittee,
+                    role=vice_chair_role,
+                    election_list_name=vice_chair_membership.election_list_name,
+                    election_list_position=2,
+                    election_votes=vice_chair_membership.election_votes
+                )
+            
+            # Third member becomes clerk (if available)
+            if len(selected_members) > 2:
+                clerk_membership = selected_members[2]
+                RegularMembershipFactory.create(
+                    user=clerk_membership.user,
+                    committee=subcommittee,
+                    role=clerk_role,
+                    election_list_name=clerk_membership.election_list_name,
+                    election_list_position=3,
+                    election_votes=clerk_membership.election_votes
+                )
+            
+            # Rest are regular members
+            for membership in selected_members[3:]:
                 RegularMembershipFactory.create(
                     user=membership.user,
                     committee=subcommittee,
                     role=member_role,
                     election_list_name=membership.election_list_name,
-                    election_list_position=1,
+                    election_list_position=4,
                     election_votes=membership.election_votes
                 )
             

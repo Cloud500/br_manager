@@ -10,30 +10,30 @@ class Command(BaseCommand):
     
     help = 'Erstellt Standard-Rollen (System + Gremien)'
     
-    # Define system roles
+    # Define system roles (codename, name, description, role_type, sort_order)
     SYSTEM_ROLES = [
         ('SYSTEM_ADMIN', 'System-Administrator', 
-         'Vollständige System-Administration', 'SYSTEM'),
+         'Vollständige System-Administration', 'SYSTEM', 1),
         ('USER', 'Benutzer', 
-         'Standard-Benutzer ohne besondere Rechte', 'SYSTEM'),
+         'Standard-Benutzer ohne besondere Rechte', 'SYSTEM', 100),
     ]
     
-    # Define committee roles
+    # Define committee roles (codename, name, description, role_type, sort_order)
     COMMITTEE_ROLES = [
         ('CHAIR', 'Vorsitz',
-         'Vorsitzender des Gremiums', 'COMMITTEE'),
+         'Vorsitzender des Gremiums', 'COMMITTEE', 1),
         ('VICE_CHAIR', 'Stellv. Vorsitz',
-         'Stellvertretender Vorsitzender', 'COMMITTEE'),
-        ('MEMBER', 'Mitglied',
-         'Reguläres Gremiumsmitglied', 'COMMITTEE'),
+         'Stellvertretender Vorsitzender', 'COMMITTEE', 2),
         ('CLERK', 'Schriftführung',
-         'Schriftführer des Gremiums', 'COMMITTEE'),
+         'Schriftführer des Gremiums', 'COMMITTEE', 3),
+        ('MEMBER', 'Mitglied',
+         'Reguläres Gremiumsmitglied', 'COMMITTEE', 10),
         ('SUBSTITUTE', 'Ersatzmitglied',
-         'Ersatzmitglied für reguläre Mitglieder', 'COMMITTEE'),
+         'Ersatzmitglied für reguläre Mitglieder', 'COMMITTEE', 20),
         ('EXTERNAL_MEMBER', 'Externes Mitglied',
-         'Externes Mitglied ohne Stimmrecht', 'COMMITTEE'),
+         'Externes Mitglied ohne Stimmrecht', 'COMMITTEE', 30),
         ('GUEST', 'Gast',
-         'Gast ohne Stimmrecht', 'COMMITTEE'),
+         'Gast ohne Stimmrecht', 'COMMITTEE', 40),
     ]
     
     def handle(self, *args, **options):
@@ -43,14 +43,15 @@ class Command(BaseCommand):
         
         # Create system roles
         self.stdout.write('\nCreating system roles...')
-        for codename, name, description, role_type in self.SYSTEM_ROLES:
+        for codename, name, description, role_type, sort_order in self.SYSTEM_ROLES:
             role, created = Role.objects.get_or_create(
                 codename=codename,
                 defaults={
                     'name': name,
                     'description': description,
                     'role_type': role_type,
-                    'is_system_role': True
+                    'is_system_role': True,
+                    'sort_order': sort_order
                 }
             )
             
@@ -61,9 +62,11 @@ class Command(BaseCommand):
                 )
             else:
                 # Update existing role
-                if (role.name != name or role.description != description):
+                if (role.name != name or role.description != description 
+                    or role.sort_order != sort_order):
                     role.name = name
                     role.description = description
+                    role.sort_order = sort_order
                     role.save()
                     updated_count += 1
                     self.stdout.write(
@@ -72,14 +75,15 @@ class Command(BaseCommand):
         
         # Create committee roles
         self.stdout.write('\nCreating committee roles...')
-        for codename, name, description, role_type in self.COMMITTEE_ROLES:
+        for codename, name, description, role_type, sort_order in self.COMMITTEE_ROLES:
             role, created = Role.objects.get_or_create(
                 codename=codename,
                 defaults={
                     'name': name,
                     'description': description,
                     'role_type': role_type,
-                    'is_system_role': True
+                    'is_system_role': True,
+                    'sort_order': sort_order
                 }
             )
             
@@ -89,9 +93,11 @@ class Command(BaseCommand):
                     self.style.SUCCESS(f'+ Created committee role: {codename}')
                 )
             else:
-                if (role.name != name or role.description != description):
+                if (role.name != name or role.description != description 
+                    or role.sort_order != sort_order):
                     role.name = name
                     role.description = description
+                    role.sort_order = sort_order
                     role.save()
                     updated_count += 1
                     self.stdout.write(

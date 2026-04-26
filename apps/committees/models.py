@@ -350,35 +350,35 @@ class Committee(models.Model):
         Get active regular members.
         
         Returns:
-            QuerySet of active REGULAR memberships
+            QuerySet of active REGULAR memberships, ordered by role sort_order
         """
         return self.memberships.filter(
             is_active=True,
             member_type='REGULAR'
-        ).select_related('user', 'role')
+        ).select_related('user', 'role').order_by('role__sort_order', 'user__last_name')
     
     def get_active_substitutes(self) -> models.QuerySet:
         """
         Get active substitute members.
         
         Returns:
-            QuerySet of active SUBSTITUTE memberships
+            QuerySet of active SUBSTITUTE memberships, ordered by role sort_order
         """
         return self.memberships.filter(
             is_active=True,
             member_type='SUBSTITUTE'
-        ).select_related('user', 'role')
+        ).select_related('user', 'role').order_by('role__sort_order', 'user__last_name')
     
     def get_external_members(self) -> models.QuerySet:
         """
         Get external members.
         
         Returns:
-            QuerySet of EXTERNAL memberships
+            QuerySet of EXTERNAL memberships, ordered by role sort_order
         """
         return self.memberships.filter(
             member_type='EXTERNAL'
-        ).select_related('user', 'role')
+        ).select_related('user', 'role').order_by('role__sort_order', 'user__last_name')
 
 
 class Membership(models.Model):
