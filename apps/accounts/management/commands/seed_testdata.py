@@ -1,5 +1,6 @@
 """Management command to seed test data for development."""
 
+import json
 import random
 import time
 from datetime import datetime
@@ -7,7 +8,7 @@ from pathlib import Path
 
 import pyotp
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.accounts.factories import (
@@ -36,9 +37,9 @@ class Command(BaseCommand):
     All users have the password 'testpass123'.
     
     Usage:
-        python manage.py seed_testdata
-        python manage.py seed_testdata --users 10
-        python manage.py seed_testdata --clear --users 5
+        python manage.py seed_testdata --config testdata_config.json
+        python manage.py seed_testdata --clear --config testdata_config.json
+        python manage.py seed_testdata --users 10  (legacy mode without config)
     """
 
     help = "Seed test data for development (users with 2FA enabled)"
@@ -51,10 +52,16 @@ class Command(BaseCommand):
             help="Clear all existing user data before seeding",
         )
         parser.add_argument(
+            "--config",
+            type=str,
+            default=None,
+            help="Path to JSON config file (relative to project root)",
+        )
+        parser.add_argument(
             "--users",
             type=int,
-            default=10,
-            help="Number of regular users to create (default: 10)",
+            default=None,
+            help="Number of regular users to create (legacy mode, ignored if --config is provided)",
         )
         parser.add_argument(
             "--no-committees",
@@ -64,16 +71,29 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """Execute the command."""
-        user_count = options["users"]
-
         self.stdout.write(self.style.WARNING("\n" + "=" * 60))
         self.stdout.write(self.style.WARNING("  SEEDING TEST DATA"))
         self.stdout.write(self.style.WARNING("=" * 60 + "\n"))
 
+        # Load configuration
+        config = None
+        if options.get("config"):
+            config = self._load_config(options["config"])
+        
+        # Determine user count
+        if config:
+            user_count = (
+                config["users"]["male_count"] 
+                + config["users"]["female_count"] 
+                + config["users"]["guest_count"]
+            )
+        else:
+            user_count = options["users"] if options["users"] is not None else 10
+
         # Clear existing data if requested
         if options["clear"]:
             self.stdout.write("Clearing existing data...")
-            Committee.all_objects.all().hard_delete()  # Use all_objects to get all including soft-deleted
+            Committee.all_objects.all().hard_delete()
             Membership.all_objects.all().hard_delete()
             User.objects.all().delete()
             self.stdout.write(self.style.SUCCESS("[OK] Data cleared\n"))
@@ -81,12 +101,19 @@ class Command(BaseCommand):
         # Create test data
         with transaction.atomic():
             admin = self._create_admin()
-            users = self._create_test_users(count=user_count)
+            
+            if config:
+                users = self._create_configured_users(config)
+            else:
+                users = self._create_test_users(count=user_count)
             
             # Create committees and memberships
             committees_data = None
             if not options.get("no_committees"):
-                committees_data = self._create_committees_structure(admin, users)
+                if config:
+                    committees_data = self._create_configured_committees(admin, users, config)
+                else:
+                    committees_data = self._create_committees_structure(admin, users)
 
         # Show summary
         self._show_summary(admin, users, committees_data)
@@ -100,6 +127,132 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("\n" + "=" * 60))
         self.stdout.write(self.style.SUCCESS("  [OK] SEEDING COMPLETE"))
         self.stdout.write(self.style.SUCCESS("=" * 60 + "\n"))
+
+        # Show summary
+        self._show_summary(admin, users, committees_data)
+
+        # Show TOTP info
+        self._show_totp_info()
+
+        # Write users to file for easy reference
+        self._write_users_file(admin, users)
+
+        self.stdout.write(self.style.SUCCESS("\n" + "=" * 60))
+        self.stdout.write(self.style.SUCCESS("  [OK] SEEDING COMPLETE"))
+        self.stdout.write(self.style.SUCCESS("=" * 60 + "\n"))
+
+    def _load_config(self, config_path):
+        """Load and validate configuration from JSON file."""
+        full_path = Path(settings.BASE_DIR) / config_path
+        
+        if not full_path.exists():
+            raise CommandError(f"Config file not found: {full_path}")
+        
+        try:
+            with open(full_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+        except json.JSONDecodeError as e:
+            raise CommandError(f"Invalid JSON in config file: {e}")
+        
+        # Validate configuration
+        self._validate_config(config)
+        
+        self.stdout.write(self.style.SUCCESS(f"[OK] Loaded config from: {config_path}\n"))
+        return config
+    
+    def _validate_config(self, config):
+        """Validate configuration structure and constraints."""
+        # Validate users section
+        if "users" not in config:
+            raise CommandError("Config missing 'users' section")
+        
+        users_cfg = config["users"]
+        required_user_fields = ["male_count", "female_count", "guest_count"]
+        for field in required_user_fields:
+            if field not in users_cfg:
+                raise CommandError(f"Config users section missing '{field}'")
+            if not isinstance(users_cfg[field], int) or users_cfg[field] < 0:
+                raise CommandError(f"Config users.{field} must be a non-negative integer")
+        
+        # Validate main_committee section
+        if "main_committee" not in config:
+            raise CommandError("Config missing 'main_committee' section")
+        
+        committee_cfg = config["main_committee"]
+        required_committee_fields = ["name", "total_seats", "minority_gender", "minority_min_count", "election_lists"]
+        for field in required_committee_fields:
+            if field not in committee_cfg:
+                raise CommandError(f"Config main_committee section missing '{field}'")
+        
+        # Validate minority_gender
+        if committee_cfg["minority_gender"] not in ["M", "F", None]:
+            raise CommandError("Config main_committee.minority_gender must be 'M', 'F', or null")
+        
+        # Validate total_seats
+        if not isinstance(committee_cfg["total_seats"], int) or committee_cfg["total_seats"] < 1:
+            raise CommandError("Config main_committee.total_seats must be a positive integer")
+        
+        # Validate election lists
+        if not isinstance(committee_cfg["election_lists"], list):
+            raise CommandError("Config main_committee.election_lists must be a list")
+        
+        total_list_users = 0
+        total_seats_assigned = 0
+        for i, election_list in enumerate(committee_cfg["election_lists"]):
+            if "name" not in election_list:
+                raise CommandError(f"Election list {i} missing 'name'")
+            if "user_count" not in election_list:
+                raise CommandError(f"Election list {i} missing 'user_count'")
+            if "seats_in_committee" not in election_list:
+                raise CommandError(f"Election list {i} missing 'seats_in_committee'")
+            
+            total_list_users += election_list["user_count"]
+            total_seats_assigned += election_list["seats_in_committee"]
+        
+        # Check if seats match
+        if total_seats_assigned != committee_cfg["total_seats"]:
+            raise CommandError(
+                f"Sum of seats_in_committee ({total_seats_assigned}) must equal "
+                f"total_seats ({committee_cfg['total_seats']})"
+            )
+        
+        # Check if we have enough users
+        total_available_users = users_cfg["male_count"] + users_cfg["female_count"]
+        if total_list_users > total_available_users:
+            raise CommandError(
+                f"Sum of election list user_count ({total_list_users}) exceeds "
+                f"available non-guest users ({total_available_users})"
+            )
+        
+        # Validate subcommittees section (optional)
+        if "subcommittees" in config:
+            if not isinstance(config["subcommittees"], list):
+                raise CommandError("Config subcommittees must be a list")
+            
+            total_external_count = 0
+            for i, subcommittee in enumerate(config["subcommittees"]):
+                required_sub_fields = ["name", "member_count", "external_count"]
+                for field in required_sub_fields:
+                    if field not in subcommittee:
+                        raise CommandError(f"Subcommittee {i} missing '{field}'")
+                
+                # Check if subcommittee doesn't exceed main committee size
+                if subcommittee["member_count"] > committee_cfg["total_seats"]:
+                    raise CommandError(
+                        f"Subcommittee '{subcommittee['name']}' member_count ({subcommittee['member_count']}) "
+                        f"exceeds main committee total_seats ({committee_cfg['total_seats']})"
+                    )
+                
+                total_external_count += subcommittee["external_count"]
+            
+            # Check if we have enough guests for all subcommittees combined
+            if total_external_count > users_cfg["guest_count"]:
+                raise CommandError(
+                    f"Sum of all subcommittee external_count ({total_external_count}) "
+                    f"exceeds available guest_count ({users_cfg['guest_count']})"
+                )
+        
+        self.stdout.write(self.style.SUCCESS("[OK] Configuration validated\n"))
 
     def _create_admin(self):
         """Create superuser admin."""
@@ -132,11 +285,281 @@ class Command(BaseCommand):
             users.append(user)
 
         return users
+    
+    def _create_configured_users(self, config):
+        """Create users based on configuration."""
+        users_cfg = config["users"]
+        categorized_users = {
+            'male': [],
+            'female': [],
+            'guest': []
+        }
+        
+        # Create male users
+        for i in range(users_cfg["male_count"]):
+            user = UserFactory.create(gender='M')
+            UserProfileFactory.create(user=user)
+            self._create_recovery_codes(user)
+            categorized_users['male'].append(user)
+            self.stdout.write(
+                self.style.SUCCESS(f"[OK] Male user {i+1}/{users_cfg['male_count']} created: {user.email}")
+            )
+        
+        # Create female users
+        for i in range(users_cfg["female_count"]):
+            user = UserFactory.create(gender='F')
+            UserProfileFactory.create(user=user)
+            self._create_recovery_codes(user)
+            categorized_users['female'].append(user)
+            self.stdout.write(
+                self.style.SUCCESS(f"[OK] Female user {i+1}/{users_cfg['female_count']} created: {user.email}")
+            )
+        
+        # Create guest users (gender random)
+        for i in range(users_cfg["guest_count"]):
+            user = UserFactory.create()
+            UserProfileFactory.create(user=user)
+            self._create_recovery_codes(user)
+            categorized_users['guest'].append(user)
+            self.stdout.write(
+                self.style.SUCCESS(f"[OK] Guest user {i+1}/{users_cfg['guest_count']} created: {user.email}")
+            )
+        
+        # Create custom list class that can store categorized data
+        class UserList(list):
+            pass
+        
+        # Flatten for compatibility with existing code
+        all_users = UserList(categorized_users['male'] + categorized_users['female'] + categorized_users['guest'])
+        
+        # Store categorized users for later use
+        all_users._categorized = categorized_users
+        
+        return all_users
 
     def _create_recovery_codes(self, user, count=10):
         """Create recovery codes for user."""
         for _ in range(count):
             TwoFactorRecoveryCodeFactory.create(user=user)
+    
+    def _create_configured_committees(self, admin, users, config):
+        """Create committees based on configuration."""
+        self.stdout.write("\n" + "=" * 60)
+        self.stdout.write(self.style.HTTP_INFO("  CREATING CONFIGURED COMMITTEES"))
+        self.stdout.write("=" * 60 + "\n")
+        
+        # Get required roles
+        try:
+            chair_role = Role.objects.get(codename='CHAIR')
+            member_role = Role.objects.get(codename='MEMBER')
+            substitute_role = Role.objects.get(codename='SUBSTITUTE')
+            external_role = Role.objects.get(codename='EXTERNAL_MEMBER')
+        except Role.DoesNotExist:
+            self.stdout.write(
+                self.style.WARNING(
+                    "[SKIP] Roles not found. Run 'python manage.py seed_roles' first."
+                )
+            )
+            return None
+        
+        committee_cfg = config["main_committee"]
+        
+        # 1. Create main committee
+        main_committee = MainCommitteeFactory.create(
+            name=committee_cfg["name"],
+            total_seats=committee_cfg["total_seats"],
+            substitute_logic_enabled=True,
+            minority_gender=committee_cfg["minority_gender"],
+            minority_min_count=committee_cfg["minority_min_count"]
+        )
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"[OK] Created main committee: {main_committee.name} ({main_committee.total_seats} seats)"
+            )
+        )
+        
+        # 2. Prepare user pools
+        categorized = getattr(users, '_categorized', None)
+        if categorized:
+            male_users = list(categorized['male'])
+            female_users = list(categorized['female'])
+            guest_users = list(categorized['guest'])
+        else:
+            # Fallback if not using configured users
+            male_users = [u for u in users if u.gender == 'M']
+            female_users = [u for u in users if u.gender == 'F']
+            guest_users = []
+        
+        random.shuffle(male_users)
+        random.shuffle(female_users)
+        random.shuffle(guest_users)
+        
+        # Pool of non-guest users for committee assignment
+        available_users = male_users + female_users
+        random.shuffle(available_users)
+        
+        # 3. Assign users to election lists and create memberships
+        assigned_users = []
+        list_assignments = {}  # Track which users are on which list
+        
+        for list_cfg in committee_cfg["election_lists"]:
+            list_name = list_cfg["name"]
+            user_count = list_cfg["user_count"]
+            seats_in_committee = list_cfg["seats_in_committee"]
+            
+            # Take users for this list
+            list_users = []
+            while len(list_users) < user_count and available_users:
+                list_users.append(available_users.pop(0))
+            
+            list_assignments[list_name] = list_users
+            
+            # Assign votes (descending order)
+            base_votes = 500
+            for i, user in enumerate(list_users):
+                votes = base_votes - (i * 20)
+                
+                # First N users from this list become regular members
+                if i < seats_in_committee:
+                    # First user on first list becomes chair
+                    role = chair_role if len(assigned_users) == 0 else member_role
+                    
+                    RegularMembershipFactory.create(
+                        user=user,
+                        committee=main_committee,
+                        role=role,
+                        election_list_name=list_name,
+                        election_list_position=i + 1,
+                        election_votes=votes
+                    )
+                    assigned_users.append(user)
+                    
+                    if role == chair_role:
+                        self.stdout.write(
+                            self.style.SUCCESS(f"[OK] Assigned chair: {user.get_full_name()} ({list_name})")
+                        )
+                else:
+                    # Others become substitutes
+                    SubstituteMembershipFactory.create(
+                        user=user,
+                        committee=main_committee,
+                        role=substitute_role,
+                        election_list_name=list_name,
+                        election_list_position=i + 1,
+                        election_votes=votes
+                    )
+        
+        # Verify minority gender quota
+        self._verify_minority_quota(main_committee, assigned_users)
+        
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"[OK] Assigned {len(assigned_users)} regular members to main committee"
+            )
+        )
+        
+        substitute_count = main_committee.get_active_substitutes().count()
+        if substitute_count > 0:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"[OK] Assigned {substitute_count} substitute members to main committee"
+                )
+            )
+        
+        # 4. Create subcommittees
+        subcommittees = []
+        if "subcommittees" in config:
+            used_guests = []
+            
+            # Get all main committee members for distribution
+            all_main_members = list(main_committee.get_active_members())
+            member_index = 0  # Track position for round-robin distribution
+            
+            for sub_cfg in config["subcommittees"]:
+                # Create subcommittee (no substitute logic)
+                subcommittee = SubcommitteeFactory.create(
+                    name=sub_cfg["name"],
+                    parent=main_committee,
+                    total_seats=sub_cfg["member_count"] + sub_cfg["external_count"],
+                    committee_type='SUBCOMMITTEE',
+                    substitute_logic_enabled=False
+                )
+                subcommittees.append(subcommittee)
+                
+                self.stdout.write(
+                    self.style.SUCCESS(f"[OK] Created subcommittee: {subcommittee.name}")
+                )
+                
+                # Assign members from main committee using round-robin
+                # This ensures better distribution across subcommittees
+                members_for_this_subcommittee = []
+                for _ in range(sub_cfg["member_count"]):
+                    if all_main_members:
+                        # Use modulo to wrap around if we need more assignments than available members
+                        members_for_this_subcommittee.append(all_main_members[member_index % len(all_main_members)])
+                        member_index += 1
+                
+                for membership in members_for_this_subcommittee:
+                    RegularMembershipFactory.create(
+                        user=membership.user,
+                        committee=subcommittee,
+                        role=member_role,
+                        election_list_name='',
+                        election_list_position=None,
+                        election_votes=None
+                    )
+                
+                # Assign external guests
+                for _ in range(sub_cfg["external_count"]):
+                    if guest_users:
+                        guest = guest_users.pop(0)
+                        used_guests.append(guest)
+                        
+                        ExternalMembershipFactory.create(
+                            user=guest,
+                            committee=subcommittee,
+                            role=external_role
+                        )
+                        
+                        self.stdout.write(
+                            self.style.SUCCESS(
+                                f"[OK] Added external member to {subcommittee.name}: {guest.get_full_name()}"
+                            )
+                        )
+        
+        # Count totals
+        total_memberships = Membership.objects.count()
+        
+        return {
+            'main_committee': main_committee,
+            'subcommittees': subcommittees,
+            'total_memberships': total_memberships,
+            'regular_members': main_committee.get_active_members().count(),
+            'substitute_members': main_committee.get_active_substitutes().count(),
+        }
+    
+    def _verify_minority_quota(self, committee, members):
+        """Verify that minority gender quota is met."""
+        if not committee.minority_gender or not committee.minority_min_count:
+            return
+        
+        minority_count = sum(1 for m in members if m.gender == committee.minority_gender)
+        
+        if minority_count < committee.minority_min_count:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"[WARNING] Minority quota not met! "
+                    f"Required: {committee.minority_min_count} {committee.get_minority_gender_display()}, "
+                    f"Got: {minority_count}"
+                )
+            )
+        else:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"[OK] Minority quota met: {minority_count}/{committee.minority_min_count} "
+                    f"{committee.get_minority_gender_display()}"
+                )
+            )
 
     def _create_committees_structure(self, admin, users):
         """Create realistic committee structure with memberships."""
