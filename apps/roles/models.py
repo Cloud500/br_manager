@@ -129,6 +129,11 @@ class Role(models.Model):
         verbose_name='Sortierreihenfolge',
         help_text='Niedrigere Werte = höhere Priorität (z.B. Vorsitz=1, Stellv.=2, etc.)'
     )
+    auto_include_in_ba = models.BooleanField(
+        default=False,
+        verbose_name='Automatisch im Betriebsausschuss',
+        help_text='Mitglieder mit dieser Rolle werden automatisch zum Betriebsausschuss hinzugefügt (§ 27 BetrVG)'
+    )
     created_at = models.DateTimeField(
         default=timezone.now,
         verbose_name='Erstellt am'
