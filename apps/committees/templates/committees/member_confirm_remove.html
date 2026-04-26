@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Mitglied entfernen - {{ committee.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_list' %}">Gremien</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_detail' committee.pk %}">{{ committee.name }}</a></li>
+            <li class="breadcrumb-item active">Mitglied entfernen</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Mitglied entfernen</h5>
+                </div>
+                <div class="card-body">
+                    <p class="lead">
+                        Möchten Sie <strong>{{ object.user.get_full_name }}</strong> wirklich aus dem Gremium 
+                        <strong>{{ committee.name }}</strong> entfernen?
+                    </p>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-info-circle"></i> 
+                        Die Mitgliedschaft wird soft-deleted (nicht permanent gelöscht) und kann später wiederhergestellt werden.
+                    </div>
+
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6>Details zur Mitgliedschaft:</h6>
+                            <table class="table table-sm table-borderless mb-0">
+                                <tr>
+                                    <th style="width: 200px;">Name:</th>
+                                    <td>{{ object.user.get_full_name }}</td>
+                                </tr>
+                                <tr>
+                                    <th>E-Mail:</th>
+                                    <td>{{ object.user.email }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Mitgliedstyp:</th>
+                                    <td>{{ object.get_member_type_display }}</td>
+                                </tr>
+                                {% if object.role %}
+                                <tr>
+                                    <th>Rolle:</th>
+                                    <td>{{ object.role.name }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <th>Mitglied seit:</th>
+                                    <td>{{ object.start_date|date:"d.m.Y" }}</td>
+                                </tr>
+                                {% if object.election_list_name %}
+                                <tr>
+                                    <th>Liste:</th>
+                                    <td>{{ object.election_list_name }} (Position {{ object.election_list_position }})</td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'committees:committee_detail' committee.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Ja, Mitglied entfernen
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
