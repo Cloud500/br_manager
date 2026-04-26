@@ -211,14 +211,81 @@ class MemberListView(
             committee=committee,
             member_type='SUBSTITUTE',
             is_active=True
-        ).select_related('user', 'role').order_by('role__sort_order', 'user__last_name')
+        ).select_related('user', 'role')
     
     def get_context_data(self, **kwargs) -> dict:
-        """Add substitute memberships to context."""
+        """Add substitute memberships to context with fair rotation order."""
         context = super().get_context_data(**kwargs)
         
-        # Use the original queryset for substitute members
-        context['substitute_members'] = self.get_queryset()
+        # Get all substitutes
+        all_substitutes = list(self.get_queryset())
+        
+        # Group by election list and find max position per list to determine current state
+        lists_data = {}
+        for sub in all_substitutes:
+            list_name = sub.election_list_name or 'Ohne Liste'
+            if list_name not in lists_data:
+                lists_data[list_name] = {
+                    'members': [],
+                    'current_max_position': 0
+                }
+            lists_data[list_name]['members'].append(sub)
+        
+        # Sort members within each list by position
+        for list_name, data in lists_data.items():
+            data['members'].sort(key=lambda x: (
+                x.election_list_position if x.election_list_position else float('inf'),
+                x.user.last_name
+            ))
+        
+        # Find current highest position per list (those already in committee)
+        committee = self.get_committee()
+        current_members = Membership.objects.filter(
+            committee=committee,
+            member_type='REGULAR',
+            is_active=True
+        ).select_related('user')
+        
+        for member in current_members:
+            list_name = member.election_list_name or 'Ohne Liste'
+            if list_name in lists_data and member.election_list_position:
+                if member.election_list_position > lists_data[list_name]['current_max_position']:
+                    lists_data[list_name]['current_max_position'] = member.election_list_position
+        
+        # Build rotation order: alternating next candidate from each list
+        sorted_substitutes = []
+        list_names = sorted(lists_data.keys())
+        list_indices = {name: 0 for name in list_names}
+        
+        # Continue until all substitutes are added
+        while len(sorted_substitutes) < len(all_substitutes):
+            added_in_round = False
+            
+            for list_name in list_names:
+                data = lists_data[list_name]
+                idx = list_indices[list_name]
+                
+                # Find next substitute from this list after current_max_position
+                while idx < len(data['members']):
+                    sub = data['members'][idx]
+                    # Only add if position is after current max (i.e., not already in committee)
+                    if sub.election_list_position and sub.election_list_position > data['current_max_position']:
+                        sorted_substitutes.append(sub)
+                        list_indices[list_name] = idx + 1
+                        added_in_round = True
+                        break
+                    idx += 1
+                    list_indices[list_name] = idx
+            
+            # If no member was added in this round, we're done
+            if not added_in_round:
+                break
+        
+        # Add any remaining substitutes without proper position at the end
+        remaining = [s for s in all_substitutes if s not in sorted_substitutes]
+        sorted_substitutes.extend(sorted(remaining, key=lambda x: x.user.last_name))
+        
+        context['substitute_members'] = sorted_substitutes
         
         return context
 
