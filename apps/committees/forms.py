@@ -25,8 +25,14 @@ class MembershipForm(forms.ModelForm):
             'user': forms.Select(attrs={'class': 'form-select'}),
             'role': forms.Select(attrs={'class': 'form-select'}),
             'member_type': forms.Select(attrs={'class': 'form-select'}),
-            'start_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'end_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'start_date': forms.DateInput(
+                attrs={'class': 'form-control', 'type': 'date'},
+                format='%Y-%m-%d'
+            ),
+            'end_date': forms.DateInput(
+                attrs={'class': 'form-control', 'type': 'date'},
+                format='%Y-%m-%d'
+            ),
             'election_list_name': forms.TextInput(attrs={'class': 'form-control'}),
             'election_list_position': forms.NumberInput(attrs={'class': 'form-control'}),
             'election_votes': forms.NumberInput(attrs={'class': 'form-control'}),
