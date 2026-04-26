@@ -52,6 +52,7 @@
                         <th>Name</th>
                         <th>Codename</th>
                         <th>Typ</th>
+                        <th>Sortierung</th>
                         <th>System-Rolle</th>
                         <th>Berechtigungen</th>
                         <th>Erstellt am</th>
@@ -74,6 +75,9 @@
                             {% else %}
                                 <span class="badge bg-secondary">{{ role.get_role_type_display }}</span>
                             {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ role.sort_order }}</span>
                         </td>
                         <td>
                             {% if role.is_system_role %}
@@ -108,7 +112,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center text-muted">
+                        <td colspan="8" class="text-center text-muted">
                             Keine Rollen gefunden.
                         </td>
                     </tr>
