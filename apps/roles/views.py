@@ -7,6 +7,7 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
+from apps.roles.forms import RoleForm
 from apps.roles.models import Permission, Role
 
 
@@ -67,9 +68,19 @@ class RoleCreateView(LoginRequiredMixin, AdminRequiredMixin, CreateView):
     """Create new custom role."""
     
     model = Role
+    form_class = RoleForm
     template_name = 'roles/role_form.html'
-    fields = ['name', 'codename', 'description', 'role_type']
     success_url = reverse_lazy('roles:role_list')
+    
+    def get_form(self, form_class=None):
+        """Remove codename field for update, set defaults."""
+        form = super().get_form(form_class)
+        
+        # Add placeholder for sort_order
+        if 'sort_order' in form.fields and not form.instance.pk:
+            form.fields['sort_order'].initial = 100
+        
+        return form
     
     def form_valid(self, form):
         """Set role as non-system role and current user as creator."""
@@ -88,18 +99,24 @@ class RoleUpdateView(LoginRequiredMixin, AdminRequiredMixin, UpdateView):
     """Update existing role."""
     
     model = Role
+    form_class = RoleForm
     template_name = 'roles/role_form.html'
-    fields = ['name', 'description']
     success_url = reverse_lazy('roles:role_list')
     
     def get_form(self, form_class=None):
-        """Prevent editing system role codename."""
+        """Prevent editing system role codename and restrict some fields."""
         form = super().get_form(form_class)
         
-        # System roles cannot change codename or type
+        # System roles have restrictions
         if self.object.is_system_role:
             form.fields['name'].disabled = True
             form.fields['name'].help_text = 'System-Rollen können nicht umbenannt werden.'
+            form.fields['codename'].disabled = True
+            form.fields['role_type'].disabled = True
+        
+        # Codename cannot be changed after creation
+        form.fields['codename'].disabled = True
+        form.fields['codename'].help_text = 'Code-Name kann nach der Erstellung nicht geändert werden.'
         
         return form
     
