@@ -119,8 +119,9 @@ class Command(BaseCommand):
         
         # 2. Create subcommittees
         subcommittees = []
+        betriebsausschuss = None
         subcommittee_configs = [
-            ('Wirtschaftsausschuss', 5, 'COMMITTEE'),
+            ('Betriebsausschuss', 7, 'COMMITTEE'),  # § 27 BetrVG - Will be auto-populated
             ('Personalausschuss', 5, 'SUBCOMMITTEE'),
             ('Arbeitsschutzausschuss', 7, 'SUBCOMMITTEE'),
             ('Gleichstellungsausschuss', 5, 'SUBCOMMITTEE'),
@@ -132,9 +133,12 @@ class Command(BaseCommand):
                 name=name,
                 parent=main_committee,
                 total_seats=seats,
-                committee_type=comm_type
+                committee_type=comm_type,
+                auto_composition_enabled=(comm_type == 'COMMITTEE')  # Enable for BA
             )
             subcommittees.append(sub)
+            if comm_type == 'COMMITTEE':
+                betriebsausschuss = sub
             self.stdout.write(
                 self.style.SUCCESS(f'[OK] Created: {sub.name} ({sub.total_seats} seats)')
             )
@@ -235,10 +239,73 @@ class Command(BaseCommand):
                 )
             )
         
-        # 7. Assign members to subcommittees
+        # 6.5. Get all main committee members
         main_members = list(main_committee.get_active_members())
         
+        # 6.6. Populate Betriebsausschuss automatically
+        if betriebsausschuss:
+            # Sync auto-members (Chair + Vice-Chair already created in main committee)
+            added, skipped = betriebsausschuss.sync_auto_ba_members()
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f'[OK] Betriebsausschuss: {added} auto-members added, {skipped} already present'
+                )
+            )
+            
+            # Get required size info
+            ba_info = betriebsausschuss.get_ba_size_info()
+            manual_needed = ba_info['manual_members_required']
+            
+            if manual_needed > 0:
+                # Select additional members from main committee (excluding chair and vice-chair)
+                available_members = [
+                    m for m in main_members 
+                    if m.role.codename not in ['CHAIR', 'VICE_CHAIR']
+                    and not Membership.objects.filter(
+                        user=m.user,
+                        committee=betriebsausschuss
+                    ).exists()
+                ]
+                
+                # Select random members to fill BA
+                selected_for_ba = random.sample(
+                    available_members,
+                    min(manual_needed, len(available_members))
+                )
+                
+                for membership in selected_for_ba:
+                    RegularMembershipFactory.create(
+                        user=membership.user,
+                        committee=betriebsausschuss,
+                        role=member_role,  # Regular member role
+                        election_list_name=membership.election_list_name,
+                        election_list_position=membership.election_list_position,
+                        election_votes=membership.election_votes
+                    )
+                
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f'[OK] Betriebsausschuss: {len(selected_for_ba)} additional members added'
+                    )
+                )
+                
+                # Validate BA composition
+                is_valid, message = betriebsausschuss.get_ba_composition_status()
+                if is_valid:
+                    self.stdout.write(
+                        self.style.SUCCESS(f'[OK] Betriebsausschuss composition: {message}')
+                    )
+                else:
+                    self.stdout.write(
+                        self.style.WARNING(f'[WARN] Betriebsausschuss composition: {message}')
+                    )
+        
+        # 7. Assign members to subcommittees (excluding BA)
         for subcommittee in subcommittees:
+            # Skip Betriebsausschuss - already populated
+            if subcommittee.committee_type == 'COMMITTEE':
+                continue
+            
             # Select random members from main committee
             selected_members = random.sample(
                 main_members,
@@ -292,8 +359,8 @@ class Command(BaseCommand):
                     election_votes=membership.election_votes
                 )
             
-            # Add external expert to some committees
-            if subcommittee.name in ['Wirtschaftsausschuss', 'Gesundheitsausschuss']:
+            # Add external expert to some committees (not to Betriebsausschuss)
+            if subcommittee.name in ['Gesundheitsausschuss']:
                 # Find users not in main committee
                 non_main_users = [
                     u for u in users
