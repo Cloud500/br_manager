@@ -11,6 +11,7 @@ class CommitteePermissionMixin(UserPassesTestMixin):
     Mixin to check committee permissions.
     
     Requires 'required_permission' attribute on the view.
+    Checks if user has the permission through their roles.
     """
     
     required_permission = None
@@ -20,7 +21,7 @@ class CommitteePermissionMixin(UserPassesTestMixin):
         Test if user has required permission.
         
         Returns:
-            True if user is superuser or staff (TODO: implement proper permission check)
+            True if user is superuser or has permission through their roles
         """
         user = self.request.user
         
@@ -28,9 +29,34 @@ class CommitteePermissionMixin(UserPassesTestMixin):
         if user.is_superuser:
             return True
         
-        # Staff has access (TODO: Later implement proper role/permission checking)
-        if user.is_staff:
-            return True
+        # Check if required_permission is set
+        if not self.required_permission:
+            # If no permission is required, deny access (fail-safe)
+            return False
+        
+        # Check if user has permission through their roles in any committee
+        # User memberships give them roles, which have permissions
+        from apps.committees.models import Membership
+        from apps.roles.models import RolePermission
+        
+        # Get all active memberships for the user
+        user_memberships = Membership.objects.filter(
+            user=user,
+            is_active=True,
+            deleted_at__isnull=True
+        ).select_related('role')
+        
+        # Check if any of the user's roles has the required permission
+        for membership in user_memberships:
+            if membership.role:
+                # Check if this role has the required permission
+                has_permission = RolePermission.objects.filter(
+                    role=membership.role,
+                    permission__codename=self.required_permission
+                ).exists()
+                
+                if has_permission:
+                    return True
         
         return False
 
