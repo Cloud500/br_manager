@@ -4,7 +4,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
-from .models import UserInvitation
+from .models import UserInvitation, UserProfile
 
 User = get_user_model()
 
@@ -50,14 +50,25 @@ class UserRegistrationForm(forms.ModelForm):
         label='Passwort bestätigen',
         widget=forms.PasswordInput(attrs={'class': 'form-control'})
     )
+    department = forms.CharField(
+        label='Abteilung',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. IT, Produktion, ...'})
+    )
+    employee_id = forms.CharField(
+        label='Mitarbeiter-ID',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. EMP-12345'})
+    )
     
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'gender']
+        fields = ['first_name', 'last_name', 'gender', 'phone']
         widgets = {
             'first_name': forms.TextInput(attrs={'class': 'form-control'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control'}),
             'gender': forms.Select(attrs={'class': 'form-select'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '+49 ...'}),
         }
     
     def __init__(self, *args, email=None, **kwargs):
@@ -77,7 +88,7 @@ class UserRegistrationForm(forms.ModelForm):
         return cleaned_data
     
     def save(self, commit=True):
-        """Save user with hashed password."""
+        """Save user with hashed password and create profile."""
         user = super().save(commit=False)
         user.email = self.email
         user.set_password(self.cleaned_data['password'])
@@ -85,12 +96,30 @@ class UserRegistrationForm(forms.ModelForm):
         
         if commit:
             user.save()
+            # Create UserProfile with department and employee_id
+            UserProfile.objects.create(
+                user=user,
+                department=self.cleaned_data.get('department', ''),
+                employee_id=self.cleaned_data.get('employee_id', '')
+            )
         
         return user
 
 
 class UserUpdateForm(forms.ModelForm):
     """Form for updating existing users (Admin use)."""
+    
+    # UserProfile fields
+    department = forms.CharField(
+        label='Abteilung',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. IT, Produktion, ...'})
+    )
+    employee_id = forms.CharField(
+        label='Mitarbeiter-ID',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. EMP-12345'})
+    )
     
     class Meta:
         model = User
@@ -102,10 +131,42 @@ class UserUpdateForm(forms.ModelForm):
             'phone': forms.TextInput(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        """Initialize form with profile data."""
+        super().__init__(*args, **kwargs)
+        if self.instance and hasattr(self.instance, 'profile'):
+            self.fields['department'].initial = self.instance.profile.department
+            self.fields['employee_id'].initial = self.instance.profile.employee_id
+    
+    def save(self, commit=True):
+        """Save user and update profile."""
+        user = super().save(commit=commit)
+        
+        if commit:
+            # Get or create UserProfile
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            profile.department = self.cleaned_data.get('department', '')
+            profile.employee_id = self.cleaned_data.get('employee_id', '')
+            profile.save()
+        
+        return user
 
 
 class UserProfileUpdateForm(forms.ModelForm):
     """Form for users to update their own profile."""
+    
+    # UserProfile fields
+    department = forms.CharField(
+        label='Abteilung',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. IT, Produktion, ...'})
+    )
+    employee_id = forms.CharField(
+        label='Mitarbeiter-ID',
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'z.B. EMP-12345'})
+    )
     
     class Meta:
         model = User
@@ -116,6 +177,26 @@ class UserProfileUpdateForm(forms.ModelForm):
             'gender': forms.Select(attrs={'class': 'form-select'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '+49 ...'}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        """Initialize form with profile data."""
+        super().__init__(*args, **kwargs)
+        if self.instance and hasattr(self.instance, 'profile'):
+            self.fields['department'].initial = self.instance.profile.department
+            self.fields['employee_id'].initial = self.instance.profile.employee_id
+    
+    def save(self, commit=True):
+        """Save user and update profile."""
+        user = super().save(commit=commit)
+        
+        if commit:
+            # Get or create UserProfile
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            profile.department = self.cleaned_data.get('department', '')
+            profile.employee_id = self.cleaned_data.get('employee_id', '')
+            profile.save()
+        
+        return user
 
 
 class PasswordChangeForm(forms.Form):

@@ -54,6 +54,29 @@
                         </div>
                     </div>
                     
+                    <hr class="my-3">
+                    <h6 class="text-muted">Zusätzliche Informationen</h6>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ form.department.label_tag }}
+                            {{ form.department }}
+                            {% if form.department.errors %}
+                                <div class="invalid-feedback d-block">{{ form.department.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            {{ form.employee_id.label_tag }}
+                            {{ form.employee_id }}
+                            {% if form.employee_id.errors %}
+                                <div class="invalid-feedback d-block">{{ form.employee_id.errors }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    <h6 class="text-muted">Passwort festlegen</h6>
+                    
                     <div class="mb-3">
                         {{ form.password.label_tag }}
                         {{ form.password }}

@@ -77,6 +77,33 @@
                     </div>
                 </div>
                 
+                <hr class="my-3">
+                <h6 class="text-muted">Zusätzliche Informationen</h6>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Abteilung:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {% if user.profile.department %}
+                            <span class="badge bg-secondary">{{ user.profile.department }}</span>
+                        {% else %}
+                            <span class="text-muted">Nicht angegeben</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Mitarbeiter-ID:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.profile.employee_id|default:"Nicht angegeben" }}
+                    </div>
+                </div>
+                
+                <hr class="my-3">
+                
                 <div class="row mb-3">
                     <div class="col-md-3">
                         <strong>Beigetreten:</strong>
