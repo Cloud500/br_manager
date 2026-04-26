@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load i18n %}
+{% load committee_tags %}
 
 {% block title %}Gremien{% endblock %}
 
@@ -10,9 +11,11 @@
             <h1 class="h2">Gremien</h1>
         </div>
         <div class="col-auto">
+            {% if user|has_committee_permission:"committee.create" %}
             <a href="{% url 'committees:committee_create' %}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> Neues Gremium
             </a>
+            {% endif %}
         </div>
     </div>
 
