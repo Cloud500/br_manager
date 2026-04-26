@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}{{ committee.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_list' %}">Gremien</a></li>
+            <li class="breadcrumb-item active">{{ committee.name }}</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">{{ committee.name }}</h1>
+            <p class="text-muted">{{ committee.get_committee_type_display }}</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'committees:committee_update' committee.pk %}" class="btn btn-secondary">
+                <i class="bi bi-pencil"></i> Bearbeiten
+            </a>
+            <a href="{% url 'committees:committee_delete' committee.pk %}" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Löschen
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Details</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th style="width: 200px;">Typ:</th>
+                            <td>{{ committee.get_committee_type_display }}</td>
+                        </tr>
+                        {% if committee.parent %}
+                        <tr>
+                            <th>Übergeordnet:</th>
+                            <td>
+                                <a href="{% url 'committees:committee_detail' committee.parent.pk %}">
+                                    {{ committee.parent.name }}
+                                </a>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <th>Gesamtanzahl Sitze:</th>
+                            <td>{{ committee.total_seats }}</td>
+                        </tr>
+                        <tr>
+                            <th>Quorum-Typ:</th>
+                            <td>{{ committee.get_quorum_type_display }}</td>
+                        </tr>
+                        <tr>
+                            <th>Personelle Maßnahmen:</th>
+                            <td>
+                                {% if committee.personnel_enabled %}
+                                <span class="badge bg-success">Aktiviert</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Deaktiviert</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Nachrücklogik:</th>
+                            <td>
+                                {% if committee.substitute_logic_enabled %}
+                                <span class="badge bg-success">Aktiviert</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Deaktiviert</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if committee.is_active %}
+                                <span class="badge bg-success">Aktiv</span>
+                                {% else %}
+                                <span class="badge bg-warning">Inaktiv</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+
+                    {% if committee.description %}
+                    <hr>
+                    <h6>Beschreibung</h6>
+                    <p>{{ committee.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Mitglieder</h5>
+                    <a href="{% url 'committees:member_list' committee.pk %}" class="btn btn-sm btn-primary">
+                        Alle anzeigen
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if recent_members %}
+                    <ul class="list-group">
+                        {% for membership in recent_members %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ membership.user.get_full_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        {{ membership.get_member_type_display }}
+                                        {% if membership.role %} - {{ membership.role.name }}{% endif %}
+                                    </small>
+                                </div>
+                                <span class="badge bg-primary">Seit {{ membership.start_date }}</span>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted">Keine Mitglieder vorhanden.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0">Statistik</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th>Reguläre Mitglieder:</th>
+                            <td class="text-end">{{ active_members_count }}</td>
+                        </tr>
+                        <tr>
+                            <th>Ersatzmitglieder:</th>
+                            <td class="text-end">{{ substitute_count }}</td>
+                        </tr>
+                        <tr>
+                            <th>Externe Mitglieder:</th>
+                            <td class="text-end">{{ external_count }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            {% if committee.subcommittees.all %}
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Untergeordnete Gremien</h6>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for subcommittee in committee.subcommittees.all %}
+                    <a href="{% url 'committees:committee_detail' subcommittee.pk %}" 
+                       class="list-group-item list-group-item-action">
+                        {{ subcommittee.name }}
+                        <br>
+                        <small class="text-muted">{{ subcommittee.get_committee_type_display }}</small>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

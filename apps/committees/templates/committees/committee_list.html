@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}Gremien{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">Gremien</h1>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'committees:committee_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Neues Gremium
+            </a>
+        </div>
+    </div>
+
+    {% if main_committees %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3>Hauptgremien</h3>
+            {% for committee in main_committees %}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <a href="{% url 'committees:committee_detail' committee.pk %}">
+                            {{ committee.name }}
+                        </a>
+                    </h5>
+                    <p class="card-text">
+                        <span class="badge bg-primary">{{ committee.get_committee_type_display }}</span>
+                        <span class="badge bg-secondary">{{ committee.total_seats }} Sitze</span>
+                        {% if not committee.is_active %}
+                        <span class="badge bg-warning">Inaktiv</span>
+                        {% endif %}
+                    </p>
+                    {% if committee.description %}
+                    <p class="card-text">{{ committee.description }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if subcommittees %}
+    <div class="row">
+        <div class="col-12">
+            <h3>Ausschüsse</h3>
+            <div class="row">
+                {% for committee in subcommittees %}
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <a href="{% url 'committees:committee_detail' committee.pk %}">
+                                    {{ committee.name }}
+                                </a>
+                            </h6>
+                            <p class="card-text small">
+                                <span class="badge bg-info">{{ committee.get_committee_type_display }}</span><br>
+                                Parent: {{ committee.parent.name }}<br>
+                                {{ committee.total_seats }} Sitze
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not committees %}
+    <div class="alert alert-info">
+        Keine Gremien vorhanden. Erstellen Sie ein neues Gremium.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

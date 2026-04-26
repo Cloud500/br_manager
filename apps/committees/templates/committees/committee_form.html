@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if object %}Gremium bearbeiten{% else %}Neues Gremium{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_list' %}">Gremien</a></li>
+            {% if object %}
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_detail' object.pk %}">{{ object.name }}</a></li>
+            <li class="breadcrumb-item active">Bearbeiten</li>
+            {% else %}
+            <li class="breadcrumb-item active">Neu erstellen</li>
+            {% endif %}
+        </ol>
+    </nav>
+
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        {% if object %}Gremium bearbeiten{% else %}Neues Gremium erstellen{% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% if object %}{% url 'committees:committee_detail' object.pk %}{% else %}{% url 'committees:committee_list' %}{% endif %}" 
+                               class="btn btn-secondary">
+                                Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Speichern
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
