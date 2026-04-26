@@ -19,6 +19,7 @@ urlpatterns = [
     path('<uuid:committee_id>/members/add/', views.MemberAddView.as_view(), name='member_add'),
     path('<uuid:committee_id>/members/<uuid:pk>/edit/', views.MemberEditView.as_view(), name='member_edit'),
     path('<uuid:committee_id>/members/<uuid:pk>/remove/', views.MemberRemoveView.as_view(), name='member_remove'),
+    path('<uuid:committee_id>/members/<uuid:pk>/replace/', views.MemberReplaceView.as_view(), name='member_replace'),
     
     # Substitute URLs
     path('<uuid:committee_id>/substitutes/', views.SubstituteListView.as_view(), name='substitute_list'),

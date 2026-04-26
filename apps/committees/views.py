@@ -5,7 +5,7 @@ from typing import Any
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q, QuerySet
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView,
@@ -13,6 +13,7 @@ from django.views.generic import (
     DetailView,
     ListView,
     UpdateView,
+    View,
 )
 
 from apps.committees.forms import MembershipForm
@@ -434,11 +435,296 @@ class MemberRemoveView(
         return redirect(self.get_success_url())
     
     def get_success_url(self) -> str:
-        """Redirect to member list."""
+        """Redirect to committee detail."""
         return reverse(
-            'committees:member_list',
-            kwargs={'committee_id': self.get_committee().pk}
+            'committees:committee_detail',
+            kwargs={'pk': self.get_committee().pk}
         )
+
+
+class MemberReplaceView(
+    LoginRequiredMixin,
+    CommitteePermissionMixin,
+    CommitteeContextMixin,
+    View
+):
+    """Replace a member with a substitute member."""
+    
+    required_permission = 'committee.manage_members'
+    template_name = 'committees/member_replace.html'
+    
+    def get_next_substitute(self, membership: Membership) -> Membership | None:
+        """
+        Get the next substitute member based on election list, position, and minority gender quota.
+        
+        Returns the substitute with the lowest position from the same list
+        that is higher than the current member's position.
+        Prioritizes minority gender if quota is not met.
+        """
+        committee = self.get_committee()
+        
+        # Get all substitutes from the same election list
+        base_substitutes = Membership.objects.filter(
+            committee=committee,
+            member_type='SUBSTITUTE',
+            is_active=True,
+            election_list_name=membership.election_list_name
+        ).exclude(
+            user=membership.user
+        ).select_related('user', 'role')
+        
+        if not base_substitutes.exists():
+            return None
+        
+        # Find current max position from regular members (excluding the one being removed)
+        from django.db.models import Max
+        result = Membership.objects.filter(
+            committee=committee,
+            member_type='REGULAR',
+            is_active=True,
+            election_list_name=membership.election_list_name
+        ).exclude(
+            user=membership.user
+        ).aggregate(
+            max_pos=Max('election_list_position')
+        )
+        current_max_position = result.get('max_pos') or 0
+        
+        # Filter substitutes with position higher than current max
+        eligible_substitutes = [
+            sub for sub in base_substitutes
+            if sub.election_list_position and sub.election_list_position > current_max_position
+        ]
+        
+        if not eligible_substitutes:
+            # If no position-based match, use all substitutes
+            eligible_substitutes = list(base_substitutes)
+        
+        # Check minority gender quota
+        if committee.minority_gender and committee.minority_min_count:
+            # Count current minority gender members (excluding the one being removed)
+            current_minority_count = Membership.objects.filter(
+                committee=committee,
+                member_type='REGULAR',
+                is_active=True,
+                user__gender=committee.minority_gender
+            ).exclude(
+                user=membership.user
+            ).count()
+            
+            # If below quota, prioritize minority gender substitutes
+            if current_minority_count < committee.minority_min_count:
+                # Try to find minority gender substitute first
+                minority_subs = [
+                    sub for sub in eligible_substitutes
+                    if sub.user.gender == committee.minority_gender
+                ]
+                
+                if minority_subs:
+                    # Sort by position and votes
+                    minority_subs.sort(key=lambda x: (
+                        x.election_list_position if x.election_list_position else float('inf'),
+                        -(x.election_votes if x.election_votes else 0)
+                    ))
+                    return minority_subs[0]
+        
+        # Normal sorting: by position, then by votes
+        eligible_substitutes.sort(key=lambda x: (
+            x.election_list_position if x.election_list_position else float('inf'),
+            -(x.election_votes if x.election_votes else 0)
+        ))
+        
+        return eligible_substitutes[0] if eligible_substitutes else None
+    
+    def get_sorted_substitutes(self, membership: Membership) -> list:
+        """
+        Get substitutes sorted in fair rotation order.
+        
+        Same logic as MemberListView - alternates next candidate from each list
+        respecting current positions in committee.
+        """
+        committee = self.get_committee()
+        
+        # Get all substitutes
+        all_substitutes = list(Membership.objects.filter(
+            committee=committee,
+            member_type='SUBSTITUTE',
+            is_active=True
+        ).select_related('user', 'role'))
+        
+        if not all_substitutes:
+            return []
+        
+        # Group by election list
+        lists_data = {}
+        for sub in all_substitutes:
+            list_name = sub.election_list_name or 'Ohne Liste'
+            if list_name not in lists_data:
+                lists_data[list_name] = {
+                    'members': [],
+                    'current_max_position': 0
+                }
+            lists_data[list_name]['members'].append(sub)
+        
+        # Sort members within each list by position
+        for list_name, data in lists_data.items():
+            data['members'].sort(key=lambda x: (
+                x.election_list_position if x.election_list_position else float('inf'),
+                x.user.last_name
+            ))
+        
+        # Find current highest position per list (excluding the member being removed)
+        current_members = Membership.objects.filter(
+            committee=committee,
+            member_type='REGULAR',
+            is_active=True
+        ).exclude(
+            user=membership.user
+        ).select_related('user')
+        
+        for member in current_members:
+            list_name = member.election_list_name or 'Ohne Liste'
+            if list_name in lists_data and member.election_list_position:
+                if member.election_list_position > lists_data[list_name]['current_max_position']:
+                    lists_data[list_name]['current_max_position'] = member.election_list_position
+        
+        # Build rotation order: alternating next candidate from each list
+        sorted_substitutes = []
+        list_names = sorted(lists_data.keys())
+        list_indices = {name: 0 for name in list_names}
+        
+        # Continue until all substitutes are added
+        while len(sorted_substitutes) < len(all_substitutes):
+            added_in_round = False
+            
+            for list_name in list_names:
+                data = lists_data[list_name]
+                idx = list_indices[list_name]
+                
+                # Find next substitute from this list after current_max_position
+                while idx < len(data['members']):
+                    sub = data['members'][idx]
+                    # Only add if position is after current max
+                    if sub.election_list_position and sub.election_list_position > data['current_max_position']:
+                        sorted_substitutes.append(sub)
+                        list_indices[list_name] = idx + 1
+                        added_in_round = True
+                        break
+                    idx += 1
+                    list_indices[list_name] = idx
+            
+            # If no member was added in this round, we're done
+            if not added_in_round:
+                break
+        
+        # Add any remaining substitutes without proper position at the end
+        remaining = [s for s in all_substitutes if s not in sorted_substitutes]
+        sorted_substitutes.extend(sorted(remaining, key=lambda x: x.user.last_name))
+        
+        return sorted_substitutes
+    
+    def get(self, request, *args, **kwargs):
+        """Display replacement form."""
+        membership = get_object_or_404(
+            Membership,
+            pk=kwargs.get('pk'),
+            committee=self.get_committee()
+        )
+        
+        # Only regular members can be replaced
+        if membership.member_type != 'REGULAR':
+            messages.error(request, 'Nur reguläre Mitglieder können ersetzt werden.')
+            return redirect('committees:committee_detail', pk=self.get_committee().pk)
+        
+        # Get suggested substitute
+        suggested_substitute = self.get_next_substitute(membership)
+        
+        # Get all available substitutes in fair rotation order
+        all_substitutes = self.get_sorted_substitutes(membership)
+        
+        # Calculate minority gender status
+        committee = self.get_committee()
+        minority_info = None
+        if committee.minority_gender and committee.minority_min_count:
+            current_minority_count = Membership.objects.filter(
+                committee=committee,
+                member_type='REGULAR',
+                is_active=True,
+                user__gender=committee.minority_gender
+            ).exclude(
+                user=membership.user
+            ).count()
+            
+            minority_info = {
+                'gender': committee.minority_gender,
+                'gender_display': committee.get_minority_gender_display(),
+                'current_count': current_minority_count,
+                'required_count': committee.minority_min_count,
+                'quota_met': current_minority_count >= committee.minority_min_count
+            }
+        
+        context = {
+            'committee': self.get_committee(),
+            'membership': membership,
+            'suggested_substitute': suggested_substitute,
+            'all_substitutes': all_substitutes,
+            'minority_info': minority_info,
+        }
+        
+        return render(request, self.template_name, context)
+    
+    def post(self, request, *args, **kwargs):
+        """Process replacement."""
+        membership = get_object_or_404(
+            Membership,
+            pk=kwargs.get('pk'),
+            committee=self.get_committee()
+        )
+        
+        action = request.POST.get('action')
+        
+        if action == 'remove_only':
+            # Just remove the member without replacement
+            user_name = membership.user.get_full_name()
+            membership.delete(user=request.user)
+            
+            messages.success(
+                request,
+                f'{user_name} wurde aus dem Gremium entfernt.'
+            )
+        
+        elif action == 'replace':
+            # Replace with selected substitute
+            substitute_id = request.POST.get('substitute_id')
+            
+            if not substitute_id:
+                messages.error(request, 'Bitte wählen Sie ein Ersatzmitglied aus.')
+                return redirect('committees:member_replace', committee_id=self.get_committee().pk, pk=membership.pk)
+            
+            substitute = get_object_or_404(
+                Membership,
+                pk=substitute_id,
+                committee=self.get_committee(),
+                member_type='SUBSTITUTE'
+            )
+            
+            # Store names for message
+            old_name = membership.user.get_full_name()
+            new_name = substitute.user.get_full_name()
+            
+            # Remove old member
+            membership.delete(user=request.user)
+            
+            # Promote substitute to regular
+            substitute.member_type = 'REGULAR'
+            substitute.save()
+            
+            messages.success(
+                request,
+                f'{old_name} wurde durch {new_name} ersetzt.'
+            )
+        
+        return redirect('committees:committee_detail', pk=self.get_committee().pk)
 
 
 class SubstituteListView(

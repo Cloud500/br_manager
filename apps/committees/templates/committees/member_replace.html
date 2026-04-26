@@ -1,0 +1,357 @@
+{% extends 'base.html' %}
+{% load committee_tags %}
+
+{% block title %}Mitglied ersetzen - {{ committee.name }} - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h4 class="mb-0">
+                    <i class="bi bi-arrow-repeat"></i> Mitglied ersetzen
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Gremium:</strong> {{ committee.name }}
+                </div>
+                
+                <h5 class="mb-3">Zu entfernendes Mitglied</h5>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>Name:</strong><br>
+                                {{ membership.user.get_full_name }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Rolle:</strong><br>
+                                {{ membership.role.name }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Liste:</strong><br>
+                                {{ membership.election_list_name|default:"Keine Liste" }}
+                            </div>
+                            <div class="col-md-2">
+                                <strong>Position:</strong><br>
+                                {{ membership.election_list_position|default:"-" }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h5 class="mb-3">Ersatz durch Ersatzmitglied</h5>
+                
+                {% if minority_info %}
+                <div class="alert {% if minority_info.quota_met %}alert-info{% else %}alert-warning{% endif %}">
+                    <i class="bi bi-people"></i>
+                    <strong>Minderheitengeschlecht-Quote (§ 15 Abs. 2 BetrVG):</strong>
+                    {{ minority_info.gender_display }} - {{ minority_info.current_count }} von {{ minority_info.required_count }} erforderlich
+                    {% if minority_info.quota_met %}
+                        <span class="badge bg-success ms-2">Erfüllt</span>
+                    {% else %}
+                        <span class="badge bg-danger ms-2">Nicht erfüllt</span>
+                        <br>
+                        <small>Es wird empfohlen, ein Ersatzmitglied mit Geschlecht "{{ minority_info.gender_display }}" zu wählen.</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
+                {% if suggested_substitute %}
+                <div class="alert alert-success">
+                    <i class="bi bi-lightbulb"></i>
+                    <strong>Vorschlag:</strong> Das nächste Ersatzmitglied von der gleichen Liste wäre 
+                    <strong>{{ suggested_substitute.user.get_full_name }}</strong> 
+                    (Liste: {{ suggested_substitute.election_list_name }}, Position: {{ suggested_substitute.election_list_position }})
+                    
+                    {% if committee.minority_gender and committee.minority_min_count %}
+                        {% if suggested_substitute.user.gender == committee.minority_gender %}
+                        <br>
+                        <span class="badge bg-info mt-2">
+                            <i class="bi bi-people"></i> 
+                            Minderheitengeschlecht-Quote berücksichtigt ({{ committee.get_minority_gender_display }})
+                        </span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Kein Ersatzmitglied von der gleichen Liste verfügbar.
+                </div>
+                {% endif %}
+                
+                <form method="post" id="replaceForm">
+                    {% csrf_token %}
+                    
+                    {% if all_substitutes %}
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Wählen Sie ein Ersatzmitglied aus:</label>
+                        
+                        <!-- Hidden input für Form-Submit -->
+                        <input type="hidden" name="substitute_id" id="substituteId" value="{% if suggested_substitute %}{{ suggested_substitute.pk }}{% endif %}">
+                        
+                        <!-- Custom Dropdown Button -->
+                        <div class="dropdown w-100">
+                            <button class="btn btn-outline-secondary btn-lg dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" 
+                                    type="button" 
+                                    id="dropdownMenuButton" 
+                                    data-bs-toggle="dropdown" 
+                                    aria-expanded="false">
+                                <span id="selectedText">
+                                    {% if suggested_substitute %}
+                                        {{ suggested_substitute.user.get_full_name }}
+                                    {% else %}
+                                        -- Bitte wählen --
+                                    {% endif %}
+                                </span>
+                            </button>
+                            
+                            <ul class="dropdown-menu w-100 shadow-lg" aria-labelledby="dropdownMenuButton" style="max-height: 500px; overflow-y: auto;">
+                                {% for substitute in all_substitutes %}
+                                <li>
+                                    <a class="dropdown-item substitute-option p-3" 
+                                       href="#"
+                                       data-id="{{ substitute.pk }}"
+                                       data-name="{{ substitute.user.get_full_name }}"
+                                       data-department="{{ substitute.user.profile.department|default:'' }}"
+                                       data-role="{{ substitute.role.name }}"
+                                       data-list="{{ substitute.election_list_name|default:'Keine' }}"
+                                       data-position="{{ substitute.election_list_position|default:'-' }}"
+                                       data-votes="{{ substitute.election_votes|default:'' }}"
+                                       data-gender="{{ substitute.user.gender }}"
+                                       data-is-minority="{% if committee.minority_gender and substitute.user.gender == committee.minority_gender %}true{% else %}false{% endif %}"
+                                       {% if substitute.pk == suggested_substitute.pk %}data-suggested="true"{% endif %}>
+                                        
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="flex-grow-1">
+                                                <strong class="d-block mb-1">{{ substitute.user.get_full_name }}</strong>
+                                                <div class="mb-2">
+                                                    {% if substitute.user.profile.department %}
+                                                        <span class="badge bg-secondary me-1">{{ substitute.user.profile.department }}</span>
+                                                    {% endif %}
+                                                    {% if committee.minority_gender and substitute.user.gender == committee.minority_gender %}
+                                                        <span class="badge bg-info">
+                                                            <i class="bi bi-people"></i> Minderheitengeschlecht
+                                                        </span>
+                                                    {% endif %}
+                                                    {% if substitute.pk == suggested_substitute.pk %}
+                                                        <span class="badge bg-success">
+                                                            <i class="bi bi-star-fill"></i> Empfohlen
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+                                                <small class="text-muted d-block">
+                                                    <i class="bi bi-person-badge"></i> {{ substitute.role.name }} | 
+                                                    <i class="bi bi-list-ol"></i> {{ substitute.election_list_name|default:"Keine Liste" }} | 
+                                                    <i class="bi bi-hash"></i> Pos: {{ substitute.election_list_position|default:"-" }}
+                                                    {% if substitute.election_votes %}
+                                                        | <i class="bi bi-check-circle"></i> {{ substitute.election_votes }} Stimmen
+                                                    {% endif %}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </a>
+                                </li>
+                                {% if not forloop.last %}
+                                <li><hr class="dropdown-divider"></li>
+                                {% endif %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        
+                        <!-- Selected Info Card -->
+                        <div id="selectedCard" class="card mt-3 border-primary" {% if not suggested_substitute %}style="display: none;"{% endif %}>
+                            <div class="card-header bg-primary text-white">
+                                <i class="bi bi-check-circle-fill"></i> Ausgewähltes Ersatzmitglied
+                            </div>
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">
+                                    <strong id="selectedName">{% if suggested_substitute %}{{ suggested_substitute.user.get_full_name }}{% endif %}</strong>
+                                    <span id="selectedDepartment" class="badge bg-secondary ms-2" {% if not suggested_substitute.user.profile.department %}style="display: none;"{% endif %}>
+                                        {% if suggested_substitute %}{{ suggested_substitute.user.profile.department }}{% endif %}
+                                    </span>
+                                    <span id="selectedMinority" class="badge bg-info ms-2" 
+                                          {% if not committee.minority_gender or suggested_substitute.user.gender != committee.minority_gender %}style="display: none;"{% endif %}>
+                                        <i class="bi bi-people"></i> Minderheitengeschlecht
+                                    </span>
+                                </h5>
+                                <div class="row">
+                                    <div class="col-md-3 mb-2">
+                                        <small class="text-muted d-block"><i class="bi bi-person-badge"></i> Rolle</small>
+                                        <strong id="selectedRole">{% if suggested_substitute %}{{ suggested_substitute.role.name }}{% endif %}</strong>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <small class="text-muted d-block"><i class="bi bi-list-ol"></i> Liste</small>
+                                        <strong id="selectedList">{% if suggested_substitute %}{{ suggested_substitute.election_list_name|default:"Keine" }}{% endif %}</strong>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <small class="text-muted d-block"><i class="bi bi-hash"></i> Position</small>
+                                        <strong id="selectedPosition">{% if suggested_substitute %}{{ suggested_substitute.election_list_position|default:"-" }}{% endif %}</strong>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <small class="text-muted d-block"><i class="bi bi-check-circle"></i> Stimmen</small>
+                                        <strong id="selectedVotes">{% if suggested_substitute %}{{ suggested_substitute.election_votes|default:"-" }}{% endif %}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" name="action" value="replace" class="btn btn-primary btn-lg">
+                            <i class="bi bi-arrow-repeat"></i> Mitglied ersetzen
+                        </button>
+                        <button type="submit" name="action" value="remove_only" class="btn btn-warning">
+                            <i class="bi bi-person-dash"></i> Nur entfernen (ohne Ersatz)
+                        </button>
+                        <a href="{% url 'committees:committee_detail' committee.pk %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i> Abbrechen
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Keine Ersatzmitglieder verfügbar.
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" name="action" value="remove_only" class="btn btn-warning btn-lg">
+                            <i class="bi bi-person-dash"></i> Mitglied entfernen
+                        </button>
+                        <a href="{% url 'committees:committee_detail' committee.pk %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i> Abbrechen
+                        </a>
+                    </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('replaceForm');
+    const substituteIdInput = document.getElementById('substituteId');
+    const selectedText = document.getElementById('selectedText');
+    const selectedCard = document.getElementById('selectedCard');
+    
+    // Handle dropdown item clicks
+    document.querySelectorAll('.substitute-option').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Get data from clicked item
+            const id = this.getAttribute('data-id');
+            const name = this.getAttribute('data-name');
+            const department = this.getAttribute('data-department');
+            const role = this.getAttribute('data-role');
+            const list = this.getAttribute('data-list');
+            const position = this.getAttribute('data-position');
+            const votes = this.getAttribute('data-votes');
+            const isMinority = this.getAttribute('data-is-minority') === 'true';
+            
+            // Update hidden input
+            substituteIdInput.value = id;
+            
+            // Update dropdown button text
+            selectedText.textContent = name;
+            
+            // Update selected card
+            document.getElementById('selectedName').textContent = name;
+            document.getElementById('selectedRole').textContent = role;
+            document.getElementById('selectedList').textContent = list;
+            document.getElementById('selectedPosition').textContent = position;
+            document.getElementById('selectedVotes').textContent = votes || '-';
+            
+            // Show/hide department badge
+            const deptBadge = document.getElementById('selectedDepartment');
+            if (department) {
+                deptBadge.textContent = department;
+                deptBadge.style.display = 'inline-block';
+            } else {
+                deptBadge.style.display = 'none';
+            }
+            
+            // Show/hide minority badge
+            const minorityBadge = document.getElementById('selectedMinority');
+            if (isMinority) {
+                minorityBadge.style.display = 'inline-block';
+            } else {
+                minorityBadge.style.display = 'none';
+            }
+            
+            // Show card
+            selectedCard.style.display = 'block';
+            
+            // Remove active class from all items
+            document.querySelectorAll('.substitute-option').forEach(opt => {
+                opt.classList.remove('active');
+            });
+            
+            // Add active class to clicked item
+            this.classList.add('active');
+        });
+        
+        // Mark initially selected (suggested) item as active
+        if (this.getAttribute('data-suggested') === 'true') {
+            this.classList.add('active');
+        }
+    });
+    
+    // Form submission validation
+    form.addEventListener('submit', function(e) {
+        const action = e.submitter.value;
+        
+        if (action === 'remove_only') {
+            if (!confirm('Möchten Sie das Mitglied wirklich ohne Ersatz entfernen?')) {
+                e.preventDefault();
+            }
+        } else if (action === 'replace') {
+            const selectedId = substituteIdInput.value;
+            if (!selectedId) {
+                e.preventDefault();
+                alert('Bitte wählen Sie ein Ersatzmitglied aus.');
+            }
+        }
+    });
+});
+</script>
+
+<style>
+/* Custom styling for dropdown items */
+.substitute-option {
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.substitute-option:hover {
+    background-color: #f8f9fa;
+    border-left-color: #0d6efd;
+}
+
+.substitute-option.active {
+    background-color: #e7f1ff;
+    border-left-color: #0d6efd;
+}
+
+/* Card animation */
+#selectedCard {
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+{% endblock %}
