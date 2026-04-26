@@ -482,6 +482,61 @@ class Command(BaseCommand):
                 )
             )
         
+        # 3.5. Fill Betriebsausschuss if it was auto-created
+        # BA is automatically created by signal if BR has ≥9 members
+        try:
+            ba = Committee.objects.get(
+                parent=main_committee,
+                committee_type='COMMITTEE',
+                auto_composition_enabled=True,
+                deleted_at__isnull=True
+            )
+            
+            # BA should already have CHAIR and VICE_CHAIR via signals
+            ba_member_count = ba.get_active_members().count()
+            ba_required = ba.total_seats
+            
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"[OK] Betriebsausschuss found: {ba.name} ({ba_member_count}/{ba_required} members)"
+                )
+            )
+            
+            # Fill remaining BA seats with additional BR members
+            if ba_member_count < ba_required:
+                # Get BR members who are not yet in BA (excluding substitutes)
+                br_members = list(main_committee.get_active_members())
+                ba_members = set(m.user for m in ba.get_active_members())
+                available_for_ba = [m for m in br_members if m.user not in ba_members]
+                
+                # Add additional members until BA is full
+                needed = ba_required - ba_member_count
+                for i in range(min(needed, len(available_for_ba))):
+                    membership = available_for_ba[i]
+                    RegularMembershipFactory.create(
+                        user=membership.user,
+                        committee=ba,
+                        role=member_role,  # Additional BA members are regular members
+                        election_list_name='',
+                        election_list_position=None,
+                        election_votes=None
+                    )
+                
+                new_count = ba.get_active_members().count()
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"[OK] Filled Betriebsausschuss: {new_count}/{ba_required} members"
+                    )
+                )
+        except Committee.DoesNotExist:
+            # No BA - either BR too small or auto-creation disabled
+            if main_committee.total_seats >= 9:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"[WARN] BR has {main_committee.total_seats} members but no Betriebsausschuss found"
+                    )
+                )
+        
         # 4. Create subcommittees
         subcommittees = []
         if "subcommittees" in config:
