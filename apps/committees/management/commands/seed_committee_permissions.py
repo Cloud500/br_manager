@@ -34,7 +34,7 @@ class Command(BaseCommand):
             if created:
                 created_count += 1
                 self.stdout.write(
-                    self.style.SUCCESS(f'✓ Created permission: {codename}')
+                    self.style.SUCCESS(f'+ Created permission: {codename}')
                 )
             else:
                 self.stdout.write(
