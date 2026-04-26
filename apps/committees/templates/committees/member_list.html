@@ -36,8 +36,8 @@
                     <thead>
                         <tr>
                             <th>Name</th>
-                            <th>Rolle</th>
-                            <th>Seit</th>
+                            <th>Liste</th>
+                            <th>Position</th>
                             <th>Status</th>
                             {% if perms.committees.manage_members %}
                             <th class="text-end">Aktionen</th>
@@ -49,17 +49,27 @@
                         <tr>
                             <td>
                                 <strong>{{ membership.user.get_full_name }}</strong>
-                                <br>
-                                <small class="text-muted">{{ membership.user.email }}</small>
+                                    {% if membership.user.profile.department %}
+                                        <br/>
+                                        <small class="text-muted">
+                                            {{ membership.user.profile.department }}
+                                        </small>
+                                    {% endif %}
                             </td>
                             <td>
-                                {% if membership.role %}
-                                    <span class="badge bg-primary">{{ membership.role.name }}</span>
+                                {% if membership.election_list_name %}
+                                    {{ membership.election_list_name }}
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
                             </td>
-                            <td>{{ membership.start_date|date:"d.m.Y" }}</td>
+                            <td>
+                                {% if membership.election_list_position %}
+                                    {{ membership.election_list_position }}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if membership.is_active %}
                                 <span class="badge bg-success">Aktiv</span>

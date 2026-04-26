@@ -99,9 +99,18 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Mitglieder</h5>
-                    <a href="{% url 'committees:member_list' committee.pk %}" class="btn btn-sm btn-primary">
-                        Ersatzmitglieder anzeigen
-                    </a>
+                    <div>
+                        {% if substitute_count > 0 %}
+                        <a href="{% url 'committees:member_list' committee.pk %}" class="btn btn-sm btn-outline-primary me-2">
+                            <i class="bi bi-list"></i> Ersatzmitglieder ({{ substitute_count }})
+                        </a>
+                        {% endif %}
+                        {% if perms.committees.manage_members %}
+                        <a href="{% url 'committees:member_add' committee.pk %}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-plus-circle"></i> Mitglied hinzufügen
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="card-body">
                     {% if regular_members or external_members %}
@@ -112,17 +121,30 @@
                         {% for membership in regular_members %}
                         <li class="list-group-item">
                             <div class="d-flex justify-content-between align-items-center">
-                                <div>
+                                <div class="flex-grow-1">
                                     <strong>{{ membership.user.get_full_name }}</strong>
-                                    <br>
-                                    <small class="text-muted">
-                                        {{ membership.get_member_type_display }}
-                                        - Seit {{ membership.start_date|date:"d.m.Y" }}
-                                    </small>
+                                    {% if membership.user.profile.department %}
+                                        <br/>
+                                        <small class="text-muted">
+                                            {{ membership.user.profile.department }}
+                                        </small>
+                                    {% endif %}
                                 </div>
-                                {% if membership.role %}
-                                <span class="badge bg-primary">{{ membership.role.name }}</span>
-                                {% endif %}
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if membership.role %}
+                                    <span class="badge bg-primary">{{ membership.role.name }}</span>
+                                    {% endif %}
+                                    {% if perms.committees.manage_members %}
+                                    <a href="{% url 'committees:member_edit' committee.pk membership.pk %}" 
+                                       class="btn btn-sm btn-outline-secondary" title="Bearbeiten">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'committees:member_remove' committee.pk membership.pk %}" 
+                                       class="btn btn-sm btn-outline-danger" title="Entfernen">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </div>
                         </li>
                         {% endfor %}
@@ -135,17 +157,30 @@
                         {% for membership in external_members %}
                         <li class="list-group-item">
                             <div class="d-flex justify-content-between align-items-center">
-                                <div>
+                                <div class="flex-grow-1">
                                     <strong>{{ membership.user.get_full_name }}</strong>
-                                    <br>
-                                    <small class="text-muted">
-                                        {{ membership.get_member_type_display }}
-                                        - Seit {{ membership.start_date|date:"d.m.Y" }}
-                                    </small>
+                                    {% if membership.user.profile.department %}
+                                        <br/>
+                                        <small class="text-muted">
+                                            {{ membership.user.profile.department }}
+                                        </small>
+                                    {% endif %}
                                 </div>
-                                {% if membership.role %}
-                                <span class="badge bg-info">{{ membership.role.name }}</span>
-                                {% endif %}
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if membership.role %}
+                                    <span class="badge bg-info">{{ membership.role.name }}</span>
+                                    {% endif %}
+                                    {% if perms.committees.manage_members %}
+                                    <a href="{% url 'committees:member_edit' committee.pk membership.pk %}" 
+                                       class="btn btn-sm btn-outline-secondary" title="Bearbeiten">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a href="{% url 'committees:member_remove' committee.pk membership.pk %}" 
+                                       class="btn btn-sm btn-outline-danger" title="Entfernen">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </div>
                         </li>
                         {% endfor %}
@@ -153,7 +188,12 @@
                     {% endif %}
                     
                     {% else %}
-                    <p class="text-muted">Keine Mitglieder vorhanden.</p>
+                    <p class="text-muted mb-3">Keine Mitglieder vorhanden.</p>
+                    {% if perms.committees.manage_members %}
+                    <a href="{% url 'committees:member_add' committee.pk %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-plus-circle"></i> Erstes Mitglied hinzufügen
+                    </a>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>
