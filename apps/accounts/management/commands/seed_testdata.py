@@ -92,11 +92,12 @@ class Command(BaseCommand):
 
         # Clear existing data if requested
         if options["clear"]:
-            self.stdout.write("Clearing existing data...")
+            self.stdout.write("Clearing existing TEST data (Users, Committees, Memberships)...")
             Committee.all_objects.all().hard_delete()
             Membership.all_objects.all().hard_delete()
             User.objects.all().delete()
-            self.stdout.write(self.style.SUCCESS("[OK] Data cleared\n"))
+            self.stdout.write(self.style.SUCCESS("[OK] Test data cleared"))
+            self.stdout.write(self.style.WARNING("[INFO] System data (Roles, Permissions) is NOT touched - managed by migrations only\n"))
 
         # Create test data
         with transaction.atomic():
