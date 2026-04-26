@@ -116,6 +116,48 @@ def auto_enable_ba_composition(sender, instance, created, **kwargs):
 
 
 @receiver(post_save, sender=Committee)
+def auto_create_betriebsausschuss(sender, instance, created, **kwargs):
+    """
+    Automatically create Betriebsausschuss when main committee is created.
+    
+    According to § 27 BetrVG, a BR with ≥9 members MUST have a Betriebsausschuss.
+    This signal creates it automatically with the correct size.
+    """
+    # Only for newly created MAIN committees
+    if not created or instance.committee_type != 'MAIN':
+        return
+    
+    # Only if BR has ≥9 members
+    if instance.total_seats < 9:
+        return
+    
+    # Check if BA already exists
+    existing_ba = Committee.objects.filter(
+        parent=instance,
+        committee_type='COMMITTEE',
+        deleted_at__isnull=True
+    ).exists()
+    
+    if existing_ba:
+        return
+    
+    # Calculate required BA size using validator
+    from apps.committees.validators import BetriebsausschussValidator
+    ba_size = BetriebsausschussValidator.get_total_ba_size(instance.total_seats)
+    
+    # Create Betriebsausschuss
+    ba = Committee.objects.create(
+        name=f"Betriebsausschuss {instance.name}",
+        committee_type='COMMITTEE',
+        parent=instance,
+        total_seats=ba_size,
+        substitute_logic_enabled=False,
+        auto_composition_enabled=True,
+        delegated_tasks="Laufende Geschäfte nach § 27 BetrVG"
+    )
+
+
+@receiver(post_save, sender=Committee)
 def sync_ba_on_creation(sender, instance, created, **kwargs):
     """
     Sync BA members when BA is created.
