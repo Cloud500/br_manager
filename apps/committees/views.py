@@ -70,7 +70,10 @@ class CommitteeDetailView(
         context['active_members_count'] = committee.get_active_members().count()
         context['substitute_count'] = committee.get_active_substitutes().count()
         context['external_count'] = committee.get_external_members().count()
-        context['recent_members'] = committee.get_active_members()[:5]
+        
+        # Show all regular and external members on overview
+        context['regular_members'] = committee.get_active_members()
+        context['external_members'] = committee.get_external_members()
         
         return context
 
@@ -202,21 +205,20 @@ class MemberListView(
     paginate_by = 50
     
     def get_queryset(self) -> QuerySet:
-        """Return active memberships for committee."""
+        """Return substitute memberships for committee."""
         committee = self.get_committee()
         return Membership.objects.filter(
             committee=committee,
+            member_type='SUBSTITUTE',
             is_active=True
-        ).select_related('user', 'role').order_by('member_type', 'user__last_name')
+        ).select_related('user', 'role').order_by('role__sort_order', 'user__last_name')
     
     def get_context_data(self, **kwargs) -> dict:
-        """Add grouped memberships to context."""
+        """Add substitute memberships to context."""
         context = super().get_context_data(**kwargs)
         
-        memberships = context['memberships']
-        context['regular_members'] = memberships.filter(member_type='REGULAR')
-        context['substitute_members'] = memberships.filter(member_type='SUBSTITUTE')
-        context['external_members'] = memberships.filter(member_type='EXTERNAL')
+        # Use the original queryset for substitute members
+        context['substitute_members'] = self.get_queryset()
         
         return context
 

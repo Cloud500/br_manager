@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Ersatzmitglieder - {{ committee.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_list' %}">Gremien</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_detail' committee.pk %}">{{ committee.name }}</a></li>
+            <li class="breadcrumb-item active">Ersatzmitglieder</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">Ersatzmitglieder - {{ committee.name }}</h1>
+        </div>
+        <div class="col-auto">
+            {% if perms.committees.manage_members %}
+            <a href="{% url 'committees:member_add' committee.pk %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Ersatzmitglied hinzufügen
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if substitute_members %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Ersatzmitglieder</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Rolle</th>
+                            <th>Seit</th>
+                            <th>Status</th>
+                            {% if perms.committees.manage_members %}
+                            <th class="text-end">Aktionen</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for membership in substitute_members %}
+                        <tr>
+                            <td>
+                                <strong>{{ membership.user.get_full_name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ membership.user.email }}</small>
+                            </td>
+                            <td>
+                                {% if membership.role %}
+                                    <span class="badge bg-primary">{{ membership.role.name }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ membership.start_date|date:"d.m.Y" }}</td>
+                            <td>
+                                {% if membership.is_active %}
+                                <span class="badge bg-success">Aktiv</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inaktiv</span>
+                                {% endif %}
+                            </td>
+                            {% if perms.committees.manage_members %}
+                            <td class="text-end">
+                                <a href="{% url 'committees:member_edit' committee.pk membership.pk %}" 
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a href="{% url 'committees:member_remove' committee.pk membership.pk %}" 
+                                   class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i>
+                                </a>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle"></i> Keine Ersatzmitglieder vorhanden.
+    </div>
+    {% endif %}
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <nav aria-label="Seitennavigation">
+        <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1">Erste</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Vorherige</a>
+            </li>
+            {% endif %}
+
+            <li class="page-item active">
+                <span class="page-link">
+                    Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}
+                </span>
+            </li>
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Nächste</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Letzte</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

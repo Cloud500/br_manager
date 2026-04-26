@@ -100,13 +100,16 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Mitglieder</h5>
                     <a href="{% url 'committees:member_list' committee.pk %}" class="btn btn-sm btn-primary">
-                        Alle anzeigen
+                        Ersatzmitglieder anzeigen
                     </a>
                 </div>
                 <div class="card-body">
-                    {% if recent_members %}
-                    <ul class="list-group">
-                        {% for membership in recent_members %}
+                    {% if regular_members or external_members %}
+                    
+                    {% if regular_members %}
+                    <h6 class="text-muted mb-3">Reguläre Mitglieder</h6>
+                    <ul class="list-group mb-4">
+                        {% for membership in regular_members %}
                         <li class="list-group-item">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
@@ -114,14 +117,41 @@
                                     <br>
                                     <small class="text-muted">
                                         {{ membership.get_member_type_display }}
-                                        {% if membership.role %} - {{ membership.role.name }}{% endif %}
+                                        - Seit {{ membership.start_date|date:"d.m.Y" }}
                                     </small>
                                 </div>
-                                <span class="badge bg-primary">Seit {{ membership.start_date }}</span>
+                                {% if membership.role %}
+                                <span class="badge bg-primary">{{ membership.role.name }}</span>
+                                {% endif %}
                             </div>
                         </li>
                         {% endfor %}
                     </ul>
+                    {% endif %}
+                    
+                    {% if external_members %}
+                    <h6 class="text-muted mb-3">Externe Mitglieder</h6>
+                    <ul class="list-group">
+                        {% for membership in external_members %}
+                        <li class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ membership.user.get_full_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">
+                                        {{ membership.get_member_type_display }}
+                                        - Seit {{ membership.start_date|date:"d.m.Y" }}
+                                    </small>
+                                </div>
+                                {% if membership.role %}
+                                <span class="badge bg-info">{{ membership.role.name }}</span>
+                                {% endif %}
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                    
                     {% else %}
                     <p class="text-muted">Keine Mitglieder vorhanden.</p>
                     {% endif %}
