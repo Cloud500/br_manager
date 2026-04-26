@@ -8,10 +8,14 @@ from apps.committees.models import Committee
 
 class CommitteePermissionMixin(UserPassesTestMixin):
     """
-    Mixin to check committee permissions.
+    Mixin to check committee permissions with scope support.
     
     Requires 'required_permission' attribute on the view.
     Checks if user has the permission through their roles.
+    
+    Scope logic:
+    - If user has 'committee.view_all': Can see all committees
+    - Otherwise: Only committees where user is a member (or child committees)
     """
     
     required_permission = None
@@ -59,6 +63,84 @@ class CommitteePermissionMixin(UserPassesTestMixin):
                     return True
         
         return False
+    
+    def has_view_all_permission(self) -> bool:
+        """
+        Check if user has 'committee.view_all' permission.
+        
+        Returns:
+            True if user can see all committees regardless of membership
+        """
+        user = self.request.user
+        
+        # Superuser always has view_all
+        if user.is_superuser:
+            return True
+        
+        from apps.committees.models import Membership
+        from apps.roles.models import RolePermission
+        
+        # Get all active memberships for the user
+        user_memberships = Membership.objects.filter(
+            user=user,
+            is_active=True,
+            deleted_at__isnull=True
+        ).select_related('role')
+        
+        # Check if any role has 'committee.view_all' permission
+        for membership in user_memberships:
+            if membership.role:
+                has_view_all = RolePermission.objects.filter(
+                    role=membership.role,
+                    permission__codename='committee.view_all'
+                ).exists()
+                
+                if has_view_all:
+                    return True
+        
+        return False
+    
+    def get_user_committees(self):
+        """
+        Get committees that user is a member of.
+        
+        Returns:
+            QuerySet of Committee objects where user is an active member
+        """
+        from apps.committees.models import Membership
+        
+        user = self.request.user
+        
+        # Get all committees where user is an active member
+        committee_ids = Membership.objects.filter(
+            user=user,
+            is_active=True,
+            deleted_at__isnull=True
+        ).values_list('committee_id', flat=True)
+        
+        return Committee.objects.filter(id__in=committee_ids)
+    
+    def get_user_committees_with_children(self):
+        """
+        Get committees that user is a member of, including child committees.
+        
+        Returns:
+            QuerySet of Committee objects (user's committees + their children)
+        """
+        user_committees = self.get_user_committees()
+        
+        # Get all committee IDs (parents + children)
+        committee_ids = set(user_committees.values_list('id', flat=True))
+        
+        # Add all children of user's committees
+        for committee in user_committees:
+            # Get all subcommittees (children)
+            child_ids = Committee.objects.filter(
+                parent=committee
+            ).values_list('id', flat=True)
+            committee_ids.update(child_ids)
+        
+        return Committee.objects.filter(id__in=committee_ids)
 
 
 class CommitteeContextMixin:
