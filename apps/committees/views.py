@@ -31,10 +31,24 @@ class CommitteeListView(LoginRequiredMixin, CommitteePermissionMixin, ListView):
     paginate_by = 20
     
     def get_queryset(self) -> QuerySet:
-        """Return active committees."""
-        return Committee.objects.filter(
-            is_active=True
-        ).select_related('parent').order_by('committee_type', 'name')
+        """
+        Return active committees based on user permissions.
+        
+        - If user has 'committee.view_all': Show all committees
+        - Otherwise: Only show committees where user is a member (+ children)
+        """
+        base_queryset = Committee.objects.filter(is_active=True).select_related('parent')
+        
+        # Check if user has view_all permission
+        if self.has_view_all_permission():
+            # User can see all committees
+            return base_queryset.order_by('committee_type', 'name')
+        else:
+            # User can only see their own committees and children
+            allowed_committees = self.get_user_committees_with_children()
+            return base_queryset.filter(
+                id__in=allowed_committees.values_list('id', flat=True)
+            ).order_by('committee_type', 'name')
     
     def get_context_data(self, **kwargs) -> dict:
         """Add grouped committees to context."""
@@ -60,6 +74,29 @@ class CommitteeDetailView(
     template_name = 'committees/committee_detail.html'
     context_object_name = 'committee'
     required_permission = 'committee.view'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has access to this specific committee."""
+        # First run parent dispatch (checks login + basic permission)
+        response = super().dispatch(request, *args, **kwargs)
+        
+        # If user is superuser or has view_all, allow access
+        if request.user.is_superuser or self.has_view_all_permission():
+            return response
+        
+        # Otherwise, check if committee is in user's allowed committees
+        committee = self.get_object()
+        allowed_committees = self.get_user_committees_with_children()
+        
+        if committee not in allowed_committees:
+            # User doesn't have access to this committee
+            messages.error(
+                request,
+                f'Sie haben keine Berechtigung, das Gremium "{committee.name}" anzuzeigen.'
+            )
+            return redirect('committees:committee_list')
+        
+        return response
     
     def get_context_data(self, **kwargs) -> dict:
         """Add member statistics to context."""
