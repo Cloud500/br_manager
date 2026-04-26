@@ -248,6 +248,18 @@ class Committee(models.Model):
         verbose_name='Mindestanzahl Minderheitengeschlecht'
     )
     
+    # Betriebsausschuss specific fields (§ 27 BetrVG)
+    auto_composition_enabled = models.BooleanField(
+        default=False,
+        verbose_name='Automatische Zusammensetzung',
+        help_text='Vorsitzende und Mitglieder mit auto_include_in_ba werden automatisch hinzugefügt (nur für Betriebsausschuss)'
+    )
+    delegated_tasks = models.TextField(
+        blank=True,
+        verbose_name='Delegierte Aufgaben',
+        help_text='Vom Betriebsrat delegierte Aufgaben zur selbständigen Erledigung (§ 27 Abs. 2 BetrVG)'
+    )
+    
     class Meta:
         verbose_name = 'Gremium'
         verbose_name_plural = 'Gremien'
@@ -308,6 +320,45 @@ class Committee(models.Model):
             raise ValidationError({
                 'minority_min_count': 'Mindestanzahl darf nicht größer sein als Gesamtanzahl Sitze'
             })
+        
+        # Betriebsausschuss specific validation (§ 27 BetrVG)
+        if self.committee_type == 'COMMITTEE':
+            # COMMITTEE must have MAIN parent
+            if self.parent and self.parent.committee_type != 'MAIN':
+                raise ValidationError({
+                    'parent': 'Betriebsausschuss muss direkt unter Betriebsrat (MAIN) sein'
+                })
+            
+            # Check if parent requires BA
+            if self.parent:
+                parent_member_count = self.parent.get_active_members().count()
+                if parent_member_count < 9:
+                    raise ValidationError(
+                        'Betriebsausschuss kann nur bei Betriebsräten mit mindestens 9 Mitgliedern gebildet werden (§ 27 BetrVG)'
+                    )
+            
+            # Only one COMMITTEE per parent allowed
+            if self.parent and self.pk:
+                existing_ba = Committee.objects.filter(
+                    parent=self.parent,
+                    committee_type='COMMITTEE'
+                ).exclude(pk=self.pk).exists()
+                
+                if existing_ba:
+                    raise ValidationError(
+                        'Es kann nur einen Betriebsausschuss pro Betriebsrat geben (§ 27 BetrVG)'
+                    )
+            elif self.parent:
+                # Creating new BA - check if one exists
+                existing_ba = Committee.objects.filter(
+                    parent=self.parent,
+                    committee_type='COMMITTEE'
+                ).exists()
+                
+                if existing_ba:
+                    raise ValidationError(
+                        'Es existiert bereits ein Betriebsausschuss für diesen Betriebsrat'
+                    )
     
     def delete(self, user: Optional['User'] = None) -> tuple:
         """
@@ -379,6 +430,176 @@ class Committee(models.Model):
         return self.memberships.filter(
             member_type='EXTERNAL'
         ).select_related('user', 'role').order_by('role__sort_order', 'user__last_name')
+    
+    # Betriebsausschuss specific methods (§ 27 BetrVG)
+    
+    def is_betriebsausschuss(self) -> bool:
+        """
+        Check if this committee is a Betriebsausschuss.
+        
+        Returns:
+            True if committee_type is COMMITTEE
+        """
+        return self.committee_type == 'COMMITTEE'
+    
+    def get_required_ba_size(self) -> Optional[int]:
+        """
+        Calculate required BA size based on parent BR size.
+        
+        According to § 27 BetrVG, Betriebsausschuss size depends on BR size.
+        Only applicable for COMMITTEE type with MAIN parent.
+        
+        Returns:
+            Total number of required BA members, or None if not applicable
+        """
+        if not self.is_betriebsausschuss() or not self.parent:
+            return None
+        
+        from apps.committees.validators import BetriebsausschussValidator
+        
+        br_member_count = self.parent.get_active_members().count()
+        return BetriebsausschussValidator.get_total_ba_size(br_member_count)
+    
+    def get_auto_ba_members_count(self) -> int:
+        """
+        Get count of automatically assigned BA members.
+        
+        Includes members with roles that have auto_include_in_ba=True.
+        
+        Returns:
+            Number of auto-assigned members
+        """
+        if not self.parent:
+            return 0
+        
+        from apps.roles.models import Role
+        
+        # Get roles with auto_include_in_ba
+        auto_roles = Role.objects.filter(
+            role_type='COMMITTEE',
+            auto_include_in_ba=True
+        )
+        
+        # Count members in parent BR with these roles
+        return self.parent.get_active_members().filter(
+            role__in=auto_roles
+        ).count()
+    
+    def requires_betriebsausschuss(self) -> bool:
+        """
+        Check if parent BR is required to form a Betriebsausschuss.
+        
+        Returns:
+            True if parent BR has ≥9 members (§ 27 BetrVG)
+        """
+        if not self.parent or self.parent.committee_type != 'MAIN':
+            return False
+        
+        from apps.committees.validators import BetriebsausschussValidator
+        
+        br_member_count = self.parent.get_active_members().count()
+        return BetriebsausschussValidator.requires_betriebsausschuss(br_member_count)
+    
+    def get_ba_composition_status(self) -> tuple[bool, str]:
+        """
+        Validate BA composition according to § 27 BetrVG.
+        
+        Returns:
+            Tuple of (is_valid, message)
+        """
+        if not self.is_betriebsausschuss():
+            return (True, 'Nicht zutreffend - kein Betriebsausschuss')
+        
+        if not self.parent:
+            return (False, 'Kein übergeordneter Betriebsrat')
+        
+        from apps.committees.validators import BetriebsausschussValidator
+        
+        br_member_count = self.parent.get_active_members().count()
+        ba_member_count = self.get_active_members().count()
+        auto_members_count = self.get_auto_ba_members_count()
+        
+        result = BetriebsausschussValidator.validate_ba_size(
+            br_member_count,
+            ba_member_count,
+            auto_members_count
+        )
+        
+        return (result.is_valid, result.message)
+    
+    def get_ba_size_info(self) -> Optional[dict]:
+        """
+        Get detailed information about required BA size.
+        
+        Returns:
+            Dictionary with size information or None if not applicable
+        """
+        if not self.is_betriebsausschuss() or not self.parent:
+            return None
+        
+        from apps.committees.validators import BetriebsausschussValidator
+        
+        br_member_count = self.parent.get_active_members().count()
+        ba_member_count = self.get_active_members().count()
+        auto_members_count = self.get_auto_ba_members_count()
+        
+        info = BetriebsausschussValidator.get_required_size_info(br_member_count)
+        info['current_size'] = ba_member_count
+        info['auto_members'] = auto_members_count
+        info['manual_members_required'] = info['total_size'] - auto_members_count if info['required'] else 0
+        
+        return info
+    
+    def sync_auto_ba_members(self) -> tuple[int, int]:
+        """
+        Synchronize automatic BA members from parent BR.
+        
+        Adds members with auto_include_in_ba roles to BA if not already present.
+        
+        Returns:
+            Tuple of (added_count, skipped_count)
+        """
+        if not self.is_betriebsausschuss() or not self.parent or not self.auto_composition_enabled:
+            return (0, 0)
+        
+        from apps.roles.models import Role
+        
+        # Get roles with auto_include_in_ba
+        auto_roles = Role.objects.filter(
+            role_type='COMMITTEE',
+            auto_include_in_ba=True
+        )
+        
+        # Get members from parent BR with these roles
+        parent_members = self.parent.get_active_members().filter(
+            role__in=auto_roles
+        )
+        
+        added_count = 0
+        skipped_count = 0
+        
+        for parent_membership in parent_members:
+            # Check if user already member of BA
+            existing = self.memberships.filter(
+                user=parent_membership.user,
+                deleted_at__isnull=True
+            ).exists()
+            
+            if not existing:
+                # Create BA membership with same role
+                Membership.objects.create(
+                    user=parent_membership.user,
+                    committee=self,
+                    role=parent_membership.role,
+                    member_type='REGULAR',
+                    start_date=parent_membership.start_date,
+                    is_active=True
+                )
+                added_count += 1
+            else:
+                skipped_count += 1
+        
+        return (added_count, skipped_count)
 
 
 class Membership(models.Model):
