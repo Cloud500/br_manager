@@ -32,6 +32,13 @@
                             </a>
                         </li>
                         
+                        <!-- Sitzungen Link -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'meetings:meeting_list' %}">
+                                <i class="bi bi-calendar-event"></i> Sitzungen
+                            </a>
+                        </li>
+                        
                         <!-- Verwaltung Dropdown (nur für Admins) -->
                         {% if user.is_superuser or perms.system.manage_users or perms.role.manage_roles %}
                         <li class="nav-item dropdown">

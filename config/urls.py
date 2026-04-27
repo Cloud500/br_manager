@@ -16,6 +16,7 @@ urlpatterns = [
     path("accounts/", include("apps.accounts.urls", namespace="accounts")),
     path("roles/", include("apps.roles.urls", namespace="roles")),
     path("committees/", include("apps.committees.urls", namespace="committees")),
+    path("meetings/", include("apps.meetings.urls", namespace="meetings")),
     path("", include("apps.core.urls", namespace="core")),
 ]
 
