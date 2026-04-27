@@ -1,0 +1,224 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block title %}Einladung versenden - {{ meeting.title }} - BR-Manager{% endblock %}
+
+{% block meeting_content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-envelope"></i> Einladung versenden
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Meeting Details Preview -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-calendar-event"></i> Sitzungsdetails
+                </h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless mb-0">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%;">Sitzungsnummer:</th>
+                            <td><strong>{{ meeting.meeting_number }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Titel:</th>
+                            <td>{{ meeting.title }}</td>
+                        </tr>
+                        <tr>
+                            <th>Gremium:</th>
+                            <td>{{ meeting.committee.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Datum & Zeit:</th>
+                            <td>
+                                {{ meeting.date|date:"l, d. F Y" }}<br>
+                                {{ meeting.start_time|time:"H:i" }} Uhr
+                                {% if meeting.end_time %}
+                                    - {{ meeting.end_time|time:"H:i" }} Uhr
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Ort:</th>
+                            <td>{{ meeting.get_full_location }}</td>
+                        </tr>
+                        <tr>
+                            <th>Vorsitz:</th>
+                            <td>
+                                {% if meeting.chair %}
+                                    {{ meeting.chair.get_full_name }}
+                                {% else %}
+                                    <em class="text-muted">Nicht festgelegt</em>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recipients Preview -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-people"></i> Empfänger
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 
+                    Die Einladung wird an alle aktiven Mitglieder des Gremiums 
+                    <strong>{{ meeting.committee.name }}</strong> versendet.
+                </div>
+                
+                <div class="list-group">
+                    {% for membership in meeting.committee.memberships.all %}
+                        {% if membership.is_active %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="bi bi-person"></i> 
+                                    <strong>{{ membership.user.get_full_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ membership.user.email }}</small>
+                                </div>
+                                {% if membership.role %}
+                                <span class="badge bg-secondary">{{ membership.role.name }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% empty %}
+                        <div class="list-group-item text-muted">
+                            <i class="bi bi-exclamation-circle"></i> 
+                            Keine aktiven Mitglieder gefunden
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Invitation Form -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-envelope-paper"></i> Einladungsoptionen
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.message.id_for_label }}" class="form-label">
+                            {{ form.message.label }}
+                        </label>
+                        {{ form.message }}
+                        {% if form.message.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.message.errors }}
+                            </div>
+                        {% endif %}
+                        {% if form.message.help_text %}
+                            <small class="form-text text-muted">{{ form.message.help_text }}</small>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            {{ form.include_agenda }}
+                            <label class="form-check-label" for="{{ form.include_agenda.id_for_label }}">
+                                {{ form.include_agenda.label }}
+                            </label>
+                            {% if form.include_agenda.help_text %}
+                                <br><small class="form-text text-muted">{{ form.include_agenda.help_text }}</small>
+                            {% endif %}
+                        </div>
+                        {% if form.include_agenda.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.include_agenda.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        <strong>Hinweis:</strong> Nach dem Versenden der Einladung wird der Status 
+                        der Sitzung auf "Einladung versendet" geändert. Die Sitzung kann dann nicht 
+                        mehr bearbeitet werden.
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-send"></i> Einladung versenden
+                        </button>
+                        <a href="{% url 'meetings:meeting_detail' meeting.pk %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Sidebar -->
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-lightbulb"></i> Vorschau Einladung
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="small"><strong>Betreff:</strong></p>
+                <p class="small text-muted">
+                    Einladung: {{ meeting.title }} - {{ meeting.date|date:"d.m.Y" }}
+                </p>
+                
+                <hr>
+                
+                <p class="small"><strong>Inhalt:</strong></p>
+                <div class="small text-muted">
+                    <p>Sehr geehrte Damen und Herren,</p>
+                    <p>hiermit laden wir Sie zur Sitzung des {{ meeting.committee.name }} ein:</p>
+                    <ul>
+                        <li><strong>Datum:</strong> {{ meeting.date|date:"d.m.Y" }}</li>
+                        <li><strong>Uhrzeit:</strong> {{ meeting.start_time|time:"H:i" }} Uhr</li>
+                        <li><strong>Ort:</strong> {{ meeting.get_full_location }}</li>
+                    </ul>
+                    <p><em>[Ihre persönliche Nachricht wird hier eingefügt]</em></p>
+                    <p>Mit freundlichen Grüßen</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle"></i> Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="small">
+                    <strong>Was passiert beim Versenden?</strong>
+                </p>
+                <ul class="small mb-0">
+                    <li>E-Mail an alle Mitglieder</li>
+                    <li>Status → "Einladung versendet"</li>
+                    <li>Zeitstempel wird gesetzt</li>
+                    <li>Keine Bearbeitung mehr möglich</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+    .status-badge {
+        font-size: 0.875rem;
+        padding: 0.375rem 0.75rem;
+    }
+    .meeting-card {
+        transition: transform 0.2s;
+    }
+    .meeting-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% block meeting_content %}{% endblock %}
+{% endblock %}

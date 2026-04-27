@@ -1,0 +1,102 @@
+{% load static %}
+<div class="member-select-wrapper mb-3">
+    <!-- Hidden select for actual form submission -->
+    <select name="{{ widget.name }}" id="{{ widget.attrs.id }}" class="d-none" {% if widget.is_required %}required{% endif %}>
+        {% for group_name, group_choices, group_index in widget.optgroups %}
+            {% for option in group_choices %}
+                <option value="{{ option.value }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+        {% endfor %}
+    </select>
+    
+    <!-- Custom Dropdown Button -->
+    <div class="dropdown w-100">
+        <button class="btn btn-outline-secondary btn-lg dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" 
+                type="button" 
+                id="dropdown{{ widget.attrs.id }}" 
+                data-bs-toggle="dropdown" 
+                aria-expanded="false">
+            <span id="selected{{ widget.attrs.id }}Text">
+                {% for group_name, group_choices, group_index in widget.optgroups %}
+                    {% for option in group_choices %}
+                        {% if option.selected and option.value %}{{ option.label }}{% endif %}
+                    {% endfor %}
+                {% endfor %}
+            </span>
+        </button>
+        
+        <ul class="dropdown-menu w-100 shadow-lg" aria-labelledby="dropdown{{ widget.attrs.id }}" style="max-height: 500px; overflow-y: auto;">
+            {% for group_name, group_choices, group_index in widget.optgroups %}
+                {% for option in group_choices %}
+                    {% if option.value %}
+                    <li>
+                        <a class="dropdown-item member-option p-3" 
+                           href="#"
+                           data-widget-id="{{ widget.attrs.id }}"
+                           data-value="{{ option.value }}"
+                           data-label="{{ option.label }}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <strong class="d-block mb-1">{{ option.label }}</strong>
+                                    <small class="text-danger">
+                                        DEBUG attrs: {{ option.attrs|length }} keys
+                                        {% for key, val in option.attrs.items %}
+                                            | {{ key }}={{ val }}
+                                        {% endfor %}
+                                    </small>
+                                    {% if option.attrs.data_role %}
+                                        <div class="mb-2">
+                                            <span class="badge bg-primary me-1">
+                                                <i class="bi bi-person-badge"></i> {{ option.attrs.data_role }}
+                                            </span>
+                                        </div>
+                                    {% else %}
+                                        <small class="text-muted d-block">Keine Rolle gefunden</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                    {% if not forloop.last %}
+                    <li><hr class="dropdown-divider"></li>
+                    {% endif %}
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const widgetId = '{{ widget.attrs.id }}';
+    const selectElement = document.getElementById(widgetId);
+    const dropdownButton = document.getElementById('dropdown' + widgetId);
+    const selectedText = document.getElementById('selected' + widgetId + 'Text');
+    const dropdownMenu = dropdownButton.nextElementSibling;
+    
+    // Set initial text if nothing selected
+    if (!selectedText.textContent.trim()) {
+        selectedText.innerHTML = '<span class="text-muted">-- Bitte wählen --</span>';
+    }
+    
+    // Handle option selection
+    dropdownMenu.querySelectorAll('.member-option').forEach(option => {
+        option.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const value = this.getAttribute('data-value');
+            const label = this.getAttribute('data-label');
+            
+            // Update hidden select
+            selectElement.value = value;
+            
+            // Update displayed text
+            selectedText.textContent = label;
+            
+            // Trigger change event
+            selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+});
+</script>

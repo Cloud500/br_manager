@@ -1,0 +1,625 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block title %}
+    {% if meeting %}
+        Sitzung bearbeiten - {{ meeting.title }}
+    {% else %}
+        Neue Sitzung erstellen
+    {% endif %}
+    - BR-Manager
+{% endblock %}
+
+{% block meeting_content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-calendar-event"></i> 
+            {% if meeting %}
+                Sitzung bearbeiten
+            {% else %}
+                Neue Sitzung erstellen
+            {% endif %}
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post" id="meetingForm">
+                    {% csrf_token %}
+                    
+                    <!-- Basic Information -->
+                    <h5 class="mb-3">Grundinformationen</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.committee.id_for_label }}" class="form-label">
+                            {{ form.committee.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.committee }}
+                        {% if form.committee.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.committee.errors }}
+                            </div>
+                        {% endif %}
+                        {% if form.committee.help_text %}
+                            <small class="form-text text-muted">{{ form.committee.help_text }}</small>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.title.id_for_label }}" class="form-label">
+                            {{ form.title.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.title }}
+                        {% if form.title.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.title.errors }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Time Planning -->
+                    <h5 class="mb-3">Zeitplanung</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.date.id_for_label }}" class="form-label">
+                                {{ form.date.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.date }}
+                            {% if form.date.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.date.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.start_time.id_for_label }}" class="form-label">
+                                {{ form.start_time.label }} <span class="text-danger">*</span>
+                            </label>
+                            {{ form.start_time }}
+                            {% if form.start_time.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.start_time.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="{{ form.end_time.id_for_label }}" class="form-label">
+                                {{ form.end_time.label }}
+                            </label>
+                            {{ form.end_time }}
+                            {% if form.end_time.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.end_time.errors }}
+                                </div>
+                            {% endif %}
+                            {% if form.end_time.help_text %}
+                                <small class="form-text text-muted">{{ form.end_time.help_text }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Meeting Type & Location -->
+                    <h5 class="mb-3">Sitzungstyp & Ort</h5>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.meeting_type.id_for_label }}" class="form-label">
+                            {{ form.meeting_type.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.meeting_type }}
+                        {% if form.meeting_type.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.meeting_type.errors }}
+                            </div>
+                        {% endif %}
+                        {% if form.meeting_type.help_text %}
+                            <small class="form-text text-muted">{{ form.meeting_type.help_text }}</small>
+                        {% endif %}
+                    </div>
+
+                    <!-- Online Location -->
+                    <div id="onlineFields" class="location-fields">
+                        <div class="mb-3">
+                            <label for="{{ form.location_url.id_for_label }}" class="form-label">
+                                {{ form.location_url.label }}
+                            </label>
+                            {{ form.location_url }}
+                            {% if form.location_url.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.location_url.errors }}
+                                </div>
+                            {% endif %}
+                            {% if form.location_url.help_text %}
+                                <small class="form-text text-muted">{{ form.location_url.help_text }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- In-Person Location -->
+                    <div id="addressFields" class="location-fields">
+                        <div class="mb-3">
+                            <label for="{{ form.location_name.id_for_label }}" class="form-label">
+                                {{ form.location_name.label }}
+                            </label>
+                            {{ form.location_name }}
+                            {% if form.location_name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.location_name.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.location_street.id_for_label }}" class="form-label">
+                                {{ form.location_street.label }}
+                            </label>
+                            {{ form.location_street }}
+                            {% if form.location_street.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.location_street.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label for="{{ form.location_zip.id_for_label }}" class="form-label">
+                                    {{ form.location_zip.label }}
+                                </label>
+                                {{ form.location_zip }}
+                                {% if form.location_zip.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.location_zip.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-8 mb-3">
+                                <label for="{{ form.location_city.id_for_label }}" class="form-label">
+                                    {{ form.location_city.label }}
+                                </label>
+                                {{ form.location_city }}
+                                {% if form.location_city.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.location_city.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.location_room.id_for_label }}" class="form-label">
+                                {{ form.location_room.label }}
+                            </label>
+                            {{ form.location_room }}
+                            {% if form.location_room.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.location_room.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <!-- Responsible Persons -->
+                    <h5 class="mb-3">Verantwortliche</h5>
+                    
+                    <div class="row">
+                        <!-- Sitzungsleitung -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">
+                                Sitzungsleitung <span class="text-danger">*</span>
+                            </label>
+                            {{ form.chair }}
+                            
+                            <!-- Custom Dropdown Button -->
+                            <div class="dropdown w-100">
+                                <button class="btn btn-outline-secondary btn-lg dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" 
+                                        type="button" 
+                                        id="dropdownChair" 
+                                        data-bs-toggle="dropdown" 
+                                        aria-expanded="false">
+                                    <span id="selectedChairText">
+                                        {% if form.chair.value and chair_candidates %}
+                                            {% for member in chair_candidates %}
+                                                {% if member.id == form.chair.value %}{{ member.name }}{% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            -- Bitte wählen --
+                                        {% endif %}
+                                    </span>
+                                </button>
+                                
+                                <ul class="dropdown-menu w-100 shadow-lg" aria-labelledby="dropdownChair" style="max-height: 500px; overflow-y: auto;">
+                                    {% if chair_candidates %}
+                                        {% for member in chair_candidates %}
+                                        <li>
+                                            <a class="dropdown-item member-option p-3" 
+                                               href="#"
+                                               data-field="chair"
+                                               data-id="{{ member.id }}"
+                                               data-name="{{ member.name }}"
+                                               data-role="{{ member.role }}">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="flex-grow-1">
+                                                        <strong class="d-block mb-1">{{ member.name }}</strong>
+                                                        {% if member.role %}
+                                                            <div class="mb-2">
+                                                                <span class="badge bg-primary me-1">
+                                                                    <i class="bi bi-person-badge"></i> {{ member.role }}
+                                                                </span>
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        </li>
+                                        {% if not forloop.last %}
+                                        <li><hr class="dropdown-divider"></li>
+                                        {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <li><span class="dropdown-item-text text-muted">Bitte wählen Sie zuerst ein Gremium</span></li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            
+                            {% if form.chair.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.chair.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Schriftführung -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">
+                                Schriftführung <span class="text-danger">*</span>
+                            </label>
+                            {{ form.clerk }}
+                            
+                            <!-- Custom Dropdown Button -->
+                            <div class="dropdown w-100">
+                                <button class="btn btn-outline-secondary btn-lg dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" 
+                                        type="button" 
+                                        id="dropdownClerk" 
+                                        data-bs-toggle="dropdown" 
+                                        aria-expanded="false">
+                                    <span id="selectedClerkText">
+                                        {% if form.clerk.value and clerk_candidates %}
+                                            {% for member in clerk_candidates %}
+                                                {% if member.id == form.clerk.value %}{{ member.name }}{% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            -- Bitte wählen --
+                                        {% endif %}
+                                    </span>
+                                </button>
+                                
+                                <ul class="dropdown-menu w-100 shadow-lg" aria-labelledby="dropdownClerk" style="max-height: 500px; overflow-y: auto;">
+                                    {% if clerk_candidates %}
+                                        {% for member in clerk_candidates %}
+                                        <li>
+                                            <a class="dropdown-item member-option p-3" 
+                                               href="#"
+                                               data-field="clerk"
+                                               data-id="{{ member.id }}"
+                                               data-name="{{ member.name }}"
+                                               data-role="{{ member.role }}">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="flex-grow-1">
+                                                        <strong class="d-block mb-1">{{ member.name }}</strong>
+                                                        {% if member.role %}
+                                                            <div class="mb-2">
+                                                                <span class="badge bg-primary me-1">
+                                                                    <i class="bi bi-person-badge"></i> {{ member.role }}
+                                                                </span>
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        </li>
+                                        {% if not forloop.last %}
+                                        <li><hr class="dropdown-divider"></li>
+                                        {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <li><span class="dropdown-item-text text-muted">Bitte wählen Sie zuerst ein Gremium</span></li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            
+                            {% if form.clerk.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.clerk.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if form.is_quorate.field.widget.input_type != 'hidden' %}
+                    <div class="mb-3">
+                        <label for="{{ form.is_quorate.id_for_label }}" class="form-label">
+                            {{ form.is_quorate.label }}
+                        </label>
+                        {{ form.is_quorate }}
+                        {% if form.is_quorate.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.is_quorate.errors }}
+                            </div>
+                        {% endif %}
+                        {% if form.is_quorate.help_text %}
+                            <small class="form-text text-muted">{{ form.is_quorate.help_text }}</small>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    {{ form.is_quorate }}
+                    {% endif %}
+
+                    <hr class="my-4">
+
+                    <!-- Form Actions -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> 
+                            {% if meeting %}Aktualisieren{% else %}Erstellen{% endif %}
+                        </button>
+                        <a href="{% if meeting %}{% url 'meetings:meeting_detail' meeting.pk %}{% else %}{% url 'meetings:meeting_list' %}{% endif %}" 
+                           class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Sidebar -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-question-circle"></i> Hilfe
+                </h6>
+            </div>
+            <div class="card-body">
+                <h6>Sitzungstypen:</h6>
+                <ul class="small">
+                    <li><strong>Online:</strong> Nur Online-Link erforderlich</li>
+                    <li><strong>Präsenz:</strong> Nur Adresse erforderlich</li>
+                    <li><strong>Hybrid:</strong> Beides erforderlich</li>
+                </ul>
+                
+                <hr>
+                
+                <h6>Hinweise:</h6>
+                <ul class="small mb-0">
+                    <li>Felder mit <span class="text-danger">*</span> sind Pflichtfelder</li>
+                    <li>Die Sitzungsnummer wird automatisch generiert</li>
+                    <li>Neue Sitzungen starten im Status "Entwurf"</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const meetingTypeSelect = document.getElementById('id_meeting_type');
+    const onlineFields = document.getElementById('onlineFields');
+    const addressFields = document.getElementById('addressFields');
+    const committeeSelect = document.getElementById('id_committee');
+    
+    function updateLocationFields() {
+        const selectedType = meetingTypeSelect.value;
+        
+        // Hide all first
+        onlineFields.style.display = 'none';
+        addressFields.style.display = 'none';
+        
+        // Show based on type
+        if (selectedType === 'ONLINE') {
+            onlineFields.style.display = 'block';
+        } else if (selectedType === 'IN_PERSON') {
+            addressFields.style.display = 'block';
+        } else if (selectedType === 'HYBRID') {
+            onlineFields.style.display = 'block';
+            addressFields.style.display = 'block';
+        }
+    }
+    
+    // Initial setup
+    updateLocationFields();
+    
+    // Listen for changes
+    meetingTypeSelect.addEventListener('change', updateLocationFields);
+    
+    // Load committee members when committee is selected
+    function loadCommitteeMembers(committeeId) {
+        if (!committeeId) {
+            // Clear dropdowns
+            clearMemberDropdowns();
+            return;
+        }
+        
+        fetch(`/meetings/ajax/committee/${committeeId}/members/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.chair_candidates && data.clerk_candidates) {
+                    populateMemberDropdowns(data.chair_candidates, data.clerk_candidates);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading committee members:', error);
+                clearMemberDropdowns();
+            });
+    }
+    
+    function clearMemberDropdowns() {
+        // Clear chair dropdown
+        const chairMenu = document.querySelector('#dropdownChair + .dropdown-menu');
+        chairMenu.innerHTML = '<li><span class="dropdown-item-text text-muted">Bitte wählen Sie zuerst ein Gremium</span></li>';
+        document.getElementById('selectedChairText').innerHTML = '<span class="text-muted">-- Bitte wählen --</span>';
+        document.getElementById('id_chair').value = '';
+        
+        // Clear clerk dropdown
+        const clerkMenu = document.querySelector('#dropdownClerk + .dropdown-menu');
+        clerkMenu.innerHTML = '<li><span class="dropdown-item-text text-muted">Bitte wählen Sie zuerst ein Gremium</span></li>';
+        document.getElementById('selectedClerkText').innerHTML = '<span class="text-muted">-- Bitte wählen --</span>';
+        document.getElementById('id_clerk').value = '';
+    }
+    
+    function populateMemberDropdowns(chairCandidates, clerkCandidates) {
+        // Build HTML for chair dropdown
+        let chairHtml = '';
+        if (chairCandidates.length === 0) {
+            chairHtml = '<li><span class="dropdown-item-text text-muted">Keine berechtigten Mitglieder</span></li>';
+        } else {
+            chairCandidates.forEach((member, index) => {
+                chairHtml += `
+                    <li>
+                        <a class="dropdown-item member-option p-3" 
+                           href="#"
+                           data-field="chair"
+                           data-id="${member.id}"
+                           data-name="${member.name}"
+                           data-role="${member.role}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <strong class="d-block mb-1">${member.name}</strong>
+                                    ${member.role ? `
+                                        <div class="mb-2">
+                                            <span class="badge bg-primary me-1">
+                                                <i class="bi bi-person-badge"></i> ${member.role}
+                                            </span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                `;
+                if (index < chairCandidates.length - 1) {
+                    chairHtml += '<li><hr class="dropdown-divider"></li>';
+                }
+            });
+        }
+        
+        // Build HTML for clerk dropdown
+        let clerkHtml = '';
+        if (clerkCandidates.length === 0) {
+            clerkHtml = '<li><span class="dropdown-item-text text-muted">Keine berechtigten Mitglieder</span></li>';
+        } else {
+            clerkCandidates.forEach((member, index) => {
+                clerkHtml += `
+                    <li>
+                        <a class="dropdown-item member-option p-3" 
+                           href="#"
+                           data-field="clerk"
+                           data-id="${member.id}"
+                           data-name="${member.name}"
+                           data-role="${member.role}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <strong class="d-block mb-1">${member.name}</strong>
+                                    ${member.role ? `
+                                        <div class="mb-2">
+                                            <span class="badge bg-primary me-1">
+                                                <i class="bi bi-person-badge"></i> ${member.role}
+                                            </span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                `;
+                if (index < clerkCandidates.length - 1) {
+                    clerkHtml += '<li><hr class="dropdown-divider"></li>';
+                }
+            });
+        }
+        
+        // Update chair dropdown
+        const chairMenu = document.querySelector('#dropdownChair + .dropdown-menu');
+        chairMenu.innerHTML = chairHtml;
+        
+        // Update clerk dropdown
+        const clerkMenu = document.querySelector('#dropdownClerk + .dropdown-menu');
+        clerkMenu.innerHTML = clerkHtml;
+        
+        // Re-attach event listeners
+        attachMemberOptionListeners();
+    }
+    
+    function attachMemberOptionListeners() {
+        document.querySelectorAll('.member-option').forEach(option => {
+            option.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const field = this.getAttribute('data-field');
+                const id = this.getAttribute('data-id');
+                const name = this.getAttribute('data-name');
+                
+                // Update hidden input
+                document.getElementById('id_' + field).value = id;
+                
+                // Update button text
+                const textElement = field === 'chair' ? 
+                    document.getElementById('selectedChairText') : 
+                    document.getElementById('selectedClerkText');
+                textElement.textContent = name;
+                
+                // Remove active class from all options in this dropdown
+                const fieldOptions = document.querySelectorAll('.member-option[data-field="' + field + '"]');
+                fieldOptions.forEach(opt => opt.classList.remove('active'));
+                
+                // Add active class to selected option
+                this.classList.add('active');
+            });
+        });
+    }
+    
+    // Initial member option listeners (for edit mode where committee_members already exist)
+    attachMemberOptionListeners();
+    
+    // Listen for committee changes
+    committeeSelect.addEventListener('change', function() {
+        loadCommitteeMembers(this.value);
+    });
+    
+    // Load members on page load if committee is already selected
+    if (committeeSelect.value) {
+        loadCommitteeMembers(committeeSelect.value);
+    }
+});
+</script>
+
+<style>
+/* Custom styling for dropdown items */
+.member-option {
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.member-option:hover {
+    background-color: #f8f9fa;
+    border-left-color: #0d6efd;
+}
+
+.member-option.active {
+    background-color: #e7f1ff;
+    border-left-color: #0d6efd;
+}
+</style>
+{% endblock %}

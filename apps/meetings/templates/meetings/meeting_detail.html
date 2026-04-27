@@ -1,0 +1,301 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block title %}{{ meeting.title }} - Sitzungen - BR-Manager{% endblock %}
+
+{% block meeting_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-start mb-4">
+            <div>
+                <h1>
+                    <i class="bi bi-calendar-event"></i> {{ meeting.title }}
+                </h1>
+                <p class="text-muted">Sitzungsnummer: {{ meeting.meeting_number }}</p>
+            </div>
+            <div class="btn-group" role="group">
+                <a href="{% url 'meetings:meeting_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Zurück
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="btn-toolbar gap-2" role="toolbar">
+            {% if meeting.is_editable %}
+                <a href="{% url 'meetings:meeting_edit' meeting.pk %}" class="btn btn-primary">
+                    <i class="bi bi-pencil"></i> Bearbeiten
+                </a>
+            {% endif %}
+            
+            {% if meeting.is_deletable %}
+                <a href="{% url 'meetings:meeting_delete' meeting.pk %}" class="btn btn-danger">
+                    <i class="bi bi-trash"></i> Löschen
+                </a>
+            {% endif %}
+            
+            {% if meeting.can_send_invitation %}
+                <a href="{% url 'meetings:meeting_send_invitation' meeting.pk %}" class="btn btn-success">
+                    <i class="bi bi-envelope"></i> Einladung versenden
+                </a>
+            {% endif %}
+            
+            {% if meeting.status == 'SENT' %}
+                <form method="post" action="{% url 'meetings:meeting_start' meeting.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning">
+                        <i class="bi bi-play-circle"></i> Sitzung starten
+                    </button>
+                </form>
+            {% endif %}
+            
+            {% if meeting.can_complete %}
+                <form method="post" action="{% url 'meetings:meeting_complete' meeting.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> Sitzung abschließen
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Meeting Details Card -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card meeting-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-info-circle"></i> Sitzungsdetails
+                </h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%;">Gremium:</th>
+                            <td>
+                                <a href="{% url 'committees:committee_detail' meeting.committee.pk %}">
+                                    {{ meeting.committee.name }}
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if meeting.status == 'DRAFT' %}
+                                    <span class="badge bg-secondary status-badge">
+                                        <i class="bi bi-file-earmark"></i> Entwurf
+                                    </span>
+                                {% elif meeting.status == 'SENT' %}
+                                    <span class="badge bg-info status-badge">
+                                        <i class="bi bi-envelope-check"></i> Einladung versendet
+                                    </span>
+                                {% elif meeting.status == 'IN_PROGRESS' %}
+                                    <span class="badge bg-warning status-badge">
+                                        <i class="bi bi-hourglass-split"></i> Laufend
+                                    </span>
+                                {% elif meeting.status == 'COMPLETED' %}
+                                    <span class="badge bg-success status-badge">
+                                        <i class="bi bi-check-circle"></i> Abgeschlossen
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Datum:</th>
+                            <td>{{ meeting.date|date:"l, d. F Y" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Geplante Zeit:</th>
+                            <td>
+                                {{ meeting.start_time|time:"H:i" }} Uhr
+                                {% if meeting.end_time %}
+                                    - {{ meeting.end_time|time:"H:i" }} Uhr
+                                    {% if meeting.get_duration %}
+                                        <span class="text-muted">({{ meeting.get_duration }})</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if meeting.actual_start_time %}
+                        <tr>
+                            <th>Tatsächliche Zeit:</th>
+                            <td>
+                                {{ meeting.actual_start_time|time:"H:i" }} Uhr
+                                {% if meeting.actual_end_time %}
+                                    - {{ meeting.actual_end_time|time:"H:i" }} Uhr
+                                    {% if meeting.get_actual_duration %}
+                                        <span class="text-muted">({{ meeting.get_actual_duration }})</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <th>Sitzungstyp:</th>
+                            <td>
+                                {% if meeting.meeting_type == 'ONLINE' %}
+                                    <span class="badge bg-info">
+                                        <i class="bi bi-camera-video"></i> Online
+                                    </span>
+                                {% elif meeting.meeting_type == 'IN_PERSON' %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-geo-alt"></i> Präsenz
+                                    </span>
+                                {% elif meeting.meeting_type == 'HYBRID' %}
+                                    <span class="badge bg-primary">
+                                        <i class="bi bi-diagram-3"></i> Hybrid
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Ort:</th>
+                            <td>{{ meeting.get_full_location }}</td>
+                        </tr>
+                        {% if meeting.chair %}
+                        <tr>
+                            <th>Vorsitz:</th>
+                            <td>{{ meeting.chair.get_full_name }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if meeting.clerk %}
+                        <tr>
+                            <th>Protokollführung:</th>
+                            <td>{{ meeting.clerk.get_full_name }}</td>
+                        </tr>
+                        {% endif %}
+                        {% if meeting.is_quorate is not None %}
+                        <tr>
+                            <th>Beschlussfähig:</th>
+                            <td>
+                                {% if meeting.is_quorate %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle"></i> Ja
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-x-circle"></i> Nein
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-md-4">
+        <!-- Meta Information -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-clock-history"></i> Meta-Informationen
+                </h6>
+            </div>
+            <div class="card-body">
+                <small class="text-muted d-block mb-2">
+                    <strong>Erstellt:</strong><br>
+                    {{ meeting.created_at|date:"d.m.Y H:i" }} Uhr<br>
+                    von {{ meeting.created_by.get_full_name }}
+                </small>
+                <small class="text-muted d-block mb-2">
+                    <strong>Aktualisiert:</strong><br>
+                    {{ meeting.updated_at|date:"d.m.Y H:i" }} Uhr
+                </small>
+                {% if meeting.sent_at %}
+                <small class="text-muted d-block">
+                    <strong>Einladung versendet:</strong><br>
+                    {{ meeting.sent_at|date:"d.m.Y H:i" }} Uhr
+                </small>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Quick Info -->
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-lightning"></i> Schnellinfo
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        {% if meeting.is_upcoming %}
+                            <i class="bi bi-calendar-check text-success"></i> 
+                            <span class="text-success">Anstehend</span>
+                        {% elif meeting.is_past %}
+                            <i class="bi bi-calendar-x text-muted"></i> 
+                            <span class="text-muted">Vergangen</span>
+                        {% else %}
+                            <i class="bi bi-calendar-event text-primary"></i> 
+                            <span class="text-primary">Heute</span>
+                        {% endif %}
+                    </li>
+                    <li class="mb-2">
+                        {% if meeting.is_editable %}
+                            <i class="bi bi-pencil text-primary"></i> Bearbeitbar
+                        {% else %}
+                            <i class="bi bi-lock text-muted"></i> Nicht bearbeitbar
+                        {% endif %}
+                    </li>
+                    <li class="mb-2">
+                        {% if meeting.is_deletable %}
+                            <i class="bi bi-trash text-danger"></i> Löschbar
+                        {% else %}
+                            <i class="bi bi-shield-lock text-muted"></i> Geschützt
+                        {% endif %}
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tagesordnung (Placeholder) -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-ol"></i> Tagesordnung
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle"></i> 
+                    Tagesordnungspunkte werden mit der Agendas-App hinzugefügt.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Anwesenheit (Placeholder) -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-people"></i> Anwesenheit
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle"></i> 
+                    Anwesenheitsliste wird mit der Attendance-App hinzugefügt.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block title %}Sitzung löschen - {{ meeting.title }} - BR-Manager{% endblock %}
+
+{% block meeting_content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4 text-danger">
+            <i class="bi bi-exclamation-triangle"></i> Sitzung löschen
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-trash"></i> Bestätigung erforderlich
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-danger">
+                    <h5 class="alert-heading">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Warnung!
+                    </h5>
+                    <p class="mb-0">
+                        Diese Aktion kann nicht rückgängig gemacht werden. Die Sitzung wird permanent gelöscht.
+                    </p>
+                </div>
+
+                <h5 class="mb-3">Folgende Sitzung wird gelöscht:</h5>
+                
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr>
+                            <th style="width: 30%;">Sitzungsnummer:</th>
+                            <td><strong>{{ meeting.meeting_number }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Titel:</th>
+                            <td>{{ meeting.title }}</td>
+                        </tr>
+                        <tr>
+                            <th>Gremium:</th>
+                            <td>{{ meeting.committee.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Datum:</th>
+                            <td>{{ meeting.date|date:"d.m.Y" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Uhrzeit:</th>
+                            <td>
+                                {{ meeting.start_time|time:"H:i" }} Uhr
+                                {% if meeting.end_time %}
+                                    - {{ meeting.end_time|time:"H:i" }} Uhr
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if meeting.status == 'DRAFT' %}
+                                    <span class="badge bg-secondary">Entwurf</span>
+                                {% elif meeting.status == 'SENT' %}
+                                    <span class="badge bg-info">Einladung versendet</span>
+                                {% elif meeting.status == 'IN_PROGRESS' %}
+                                    <span class="badge bg-warning">Laufend</span>
+                                {% elif meeting.status == 'COMPLETED' %}
+                                    <span class="badge bg-success">Abgeschlossen</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="alert alert-warning">
+                    <strong>Hinweis:</strong> Nur Sitzungen im Status "Entwurf" können gelöscht werden.
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i> Ja, Sitzung löschen
+                        </button>
+                        <a href="{% url 'meetings:meeting_detail' meeting.pk %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Sidebar -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle"></i> Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="small">
+                    Das Löschen einer Sitzung entfernt:
+                </p>
+                <ul class="small">
+                    <li>Die Sitzung selbst</li>
+                    <li>Alle zugehörigen Daten</li>
+                    <li>Diese Aktion ist endgültig</li>
+                </ul>
+                
+                <hr>
+                
+                <p class="small text-muted mb-0">
+                    <strong>Tipp:</strong> Wenn Sie die Sitzung behalten möchten, 
+                    klicken Sie auf "Abbrechen".
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

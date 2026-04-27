@@ -1,0 +1,281 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block title %}Sitzungen - BR-Manager{% endblock %}
+
+{% block meeting_content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="bi bi-calendar-event"></i> Sitzungen
+            </h1>
+            <a href="{% url 'meetings:meeting_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Neue Sitzung
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-funnel"></i> Filter
+                </h5>
+                <form method="get" action="{% url 'meetings:meeting_list' %}">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            {{ filter_form.committee.label_tag }}
+                            {{ filter_form.committee }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ filter_form.status.label_tag }}
+                            {{ filter_form.status }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ filter_form.meeting_type.label_tag }}
+                            {{ filter_form.meeting_type }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ filter_form.date_from.label_tag }}
+                            {{ filter_form.date_from }}
+                        </div>
+                        <div class="col-md-2">
+                            {{ filter_form.date_to.label_tag }}
+                            {{ filter_form.date_to }}
+                        </div>
+                        <div class="col-md-1 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upcoming Meetings -->
+{% if upcoming_meetings %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h3 class="mb-3">
+            <i class="bi bi-calendar-check"></i> Anstehende Sitzungen
+        </h3>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Sitzungsnummer</th>
+                        <th>Titel</th>
+                        <th>Gremium</th>
+                        <th>Datum</th>
+                        <th>Uhrzeit</th>
+                        <th>Typ</th>
+                        <th>Status</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for meeting in upcoming_meetings %}
+                    <tr>
+                        <td>
+                            <strong>{{ meeting.meeting_number }}</strong>
+                        </td>
+                        <td>
+                            <a href="{% url 'meetings:meeting_detail' meeting.pk %}">
+                                {{ meeting.title }}
+                            </a>
+                        </td>
+                        <td>{{ meeting.committee.short_name }}</td>
+                        <td>{{ meeting.date|date:"d.m.Y" }}</td>
+                        <td>
+                            {{ meeting.start_time|time:"H:i" }}
+                            {% if meeting.end_time %}
+                                - {{ meeting.end_time|time:"H:i" }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if meeting.meeting_type == 'ONLINE' %}
+                                <span class="badge bg-info">
+                                    <i class="bi bi-camera-video"></i> Online
+                                </span>
+                            {% elif meeting.meeting_type == 'IN_PERSON' %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-geo-alt"></i> Präsenz
+                                </span>
+                            {% elif meeting.meeting_type == 'HYBRID' %}
+                                <span class="badge bg-primary">
+                                    <i class="bi bi-diagram-3"></i> Hybrid
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if meeting.status == 'DRAFT' %}
+                                <span class="badge bg-secondary">Entwurf</span>
+                            {% elif meeting.status == 'SENT' %}
+                                <span class="badge bg-info">Einladung versendet</span>
+                            {% elif meeting.status == 'IN_PROGRESS' %}
+                                <span class="badge bg-warning">Laufend</span>
+                            {% elif meeting.status == 'COMPLETED' %}
+                                <span class="badge bg-success">Abgeschlossen</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'meetings:meeting_detail' meeting.pk %}" 
+                               class="btn btn-sm btn-outline-primary" 
+                               title="Details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% if meeting.is_editable %}
+                            <a href="{% url 'meetings:meeting_edit' meeting.pk %}" 
+                               class="btn btn-sm btn-outline-secondary" 
+                               title="Bearbeiten">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Past Meetings -->
+{% if past_meetings %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h3 class="mb-3">
+            <i class="bi bi-calendar-x"></i> Vergangene Sitzungen
+        </h3>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Sitzungsnummer</th>
+                        <th>Titel</th>
+                        <th>Gremium</th>
+                        <th>Datum</th>
+                        <th>Uhrzeit</th>
+                        <th>Typ</th>
+                        <th>Status</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for meeting in past_meetings %}
+                    <tr>
+                        <td>
+                            <strong>{{ meeting.meeting_number }}</strong>
+                        </td>
+                        <td>
+                            <a href="{% url 'meetings:meeting_detail' meeting.pk %}">
+                                {{ meeting.title }}
+                            </a>
+                        </td>
+                        <td>{{ meeting.committee.short_name }}</td>
+                        <td>{{ meeting.date|date:"d.m.Y" }}</td>
+                        <td>
+                            {{ meeting.start_time|time:"H:i" }}
+                            {% if meeting.end_time %}
+                                - {{ meeting.end_time|time:"H:i" }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if meeting.meeting_type == 'ONLINE' %}
+                                <span class="badge bg-info">
+                                    <i class="bi bi-camera-video"></i> Online
+                                </span>
+                            {% elif meeting.meeting_type == 'IN_PERSON' %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-geo-alt"></i> Präsenz
+                                </span>
+                            {% elif meeting.meeting_type == 'HYBRID' %}
+                                <span class="badge bg-primary">
+                                    <i class="bi bi-diagram-3"></i> Hybrid
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if meeting.status == 'DRAFT' %}
+                                <span class="badge bg-secondary">Entwurf</span>
+                            {% elif meeting.status == 'SENT' %}
+                                <span class="badge bg-info">Einladung versendet</span>
+                            {% elif meeting.status == 'IN_PROGRESS' %}
+                                <span class="badge bg-warning">Laufend</span>
+                            {% elif meeting.status == 'COMPLETED' %}
+                                <span class="badge bg-success">Abgeschlossen</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'meetings:meeting_detail' meeting.pk %}" 
+                               class="btn btn-sm btn-outline-primary" 
+                               title="Details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- No Meetings Message -->
+{% if not upcoming_meetings and not past_meetings %}
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> 
+            Keine Sitzungen gefunden. 
+            <a href="{% url 'meetings:meeting_create' %}" class="alert-link">
+                Erstellen Sie die erste Sitzung
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Pagination -->
+{% if is_paginated %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="Seitennummerierung">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1">Erste</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Zurück</a>
+                    </li>
+                {% endif %}
+                
+                <li class="page-item active">
+                    <span class="page-link">
+                        Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}
+                    </span>
+                </li>
+                
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Weiter</a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Letzte</a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
