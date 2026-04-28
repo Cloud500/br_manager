@@ -60,18 +60,16 @@ def seed_roles_and_permissions(apps, schema_editor):
          'Vorsitzender des Gremiums', 'COMMITTEE', 1, True),
         ('VICE_CHAIR', 'Stellv. Vorsitz',
          'Stellvertretender Vorsitzender', 'COMMITTEE', 2, True),
-        ('VICE_CHAIR2', '2ter Stellv. Vorsitz',
-         '2ter Stellvertretender Vorsitzender', 'COMMITTEE', 3, False),
         ('CLERK', 'Schriftführung',
-         'Schriftführer des Gremiums', 'COMMITTEE', 4, False),
+         'Schriftführer des Gremiums', 'COMMITTEE', 10, False),
         ('MEMBER', 'Mitglied',
-         'Reguläres Gremiumsmitglied', 'COMMITTEE', 10, False),
+         'Reguläres Gremiumsmitglied', 'COMMITTEE', 20, False),
         ('SUBSTITUTE', 'Ersatzmitglied',
-         'Ersatzmitglied für reguläre Mitglieder', 'COMMITTEE', 20, False),
+         'Ersatzmitglied für reguläre Mitglieder', 'COMMITTEE', 30, False),
         ('EXTERNAL_MEMBER', 'Externes Mitglied',
-         'Externes Mitglied ohne Stimmrecht', 'COMMITTEE', 30, False),
+         'Externes Mitglied ohne Stimmrecht', 'COMMITTEE', 40, False),
         ('GUEST', 'Gast',
-         'Gast ohne Stimmrecht', 'COMMITTEE', 40, False),
+         'Gast ohne Stimmrecht', 'COMMITTEE', 50, False),
     ]
     
     # Create system roles
@@ -137,7 +135,7 @@ def reverse_roles_and_permissions(apps, schema_editor):
     Role.objects.filter(
         codename__in=[
             'SYSTEM_ADMIN', 'USER',
-            'CHAIR', 'VICE_CHAIR', 'VICE_CHAIR2', 'CLERK', 'MEMBER',
+            'CHAIR', 'VICE_CHAIR', 'CLERK', 'MEMBER',
             'SUBSTITUTE', 'EXTERNAL_MEMBER', 'GUEST'
         ]
     ).delete()

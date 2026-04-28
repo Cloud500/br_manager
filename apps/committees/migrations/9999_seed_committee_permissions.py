@@ -54,10 +54,16 @@ def seed_committee_permissions(apps, schema_editor):
     except Role.DoesNotExist:
         pass
     
-    # CHAIR gets all committee permissions
+    # CHAIR gets: create, edit, view, delete, manage_members, view_members
     try:
         chair = Role.objects.get(codename='CHAIR')
-        for perm in committee_perms:
+        chair_perms = committee_perms.filter(
+            codename__in=[
+                'committee.create', 'committee.edit', 'committee.view',
+                'committee.delete', 'committee.manage_members', 'committee.view_members'
+            ]
+        )
+        for perm in chair_perms:
             RolePermission.objects.get_or_create(
                 role=chair,
                 permission=perm
@@ -65,10 +71,16 @@ def seed_committee_permissions(apps, schema_editor):
     except Role.DoesNotExist:
         pass
     
-    # VICE_CHAIR gets all committee permissions
+    # VICE_CHAIR gets: create, edit, view, delete, manage_members, view_members
     try:
         vice_chair = Role.objects.get(codename='VICE_CHAIR')
-        for perm in committee_perms:
+        vice_chair_perms = committee_perms.filter(
+            codename__in=[
+                'committee.create', 'committee.edit', 'committee.view',
+                'committee.delete', 'committee.manage_members', 'committee.view_members'
+            ]
+        )
+        for perm in vice_chair_perms:
             RolePermission.objects.get_or_create(
                 role=vice_chair,
                 permission=perm
@@ -76,13 +88,13 @@ def seed_committee_permissions(apps, schema_editor):
     except Role.DoesNotExist:
         pass
     
-    # CLERK gets view and view_members permissions
+    # CLERK gets: view, view_members
     try:
         clerk = Role.objects.get(codename='CLERK')
-        view_perms = committee_perms.filter(
+        clerk_perms = committee_perms.filter(
             codename__in=['committee.view', 'committee.view_members']
         )
-        for perm in view_perms:
+        for perm in clerk_perms:
             RolePermission.objects.get_or_create(
                 role=clerk,
                 permission=perm
@@ -90,13 +102,13 @@ def seed_committee_permissions(apps, schema_editor):
     except Role.DoesNotExist:
         pass
     
-    # MEMBER gets view and view_members permissions
+    # MEMBER gets: view, view_members
     try:
         member = Role.objects.get(codename='MEMBER')
-        view_perms = committee_perms.filter(
+        member_perms = committee_perms.filter(
             codename__in=['committee.view', 'committee.view_members']
         )
-        for perm in view_perms:
+        for perm in member_perms:
             RolePermission.objects.get_or_create(
                 role=member,
                 permission=perm
@@ -104,13 +116,13 @@ def seed_committee_permissions(apps, schema_editor):
     except Role.DoesNotExist:
         pass
     
-    # SUBSTITUTE gets view and view_members permissions
+    # SUBSTITUTE gets: view, view_members
     try:
         substitute = Role.objects.get(codename='SUBSTITUTE')
-        view_perms = committee_perms.filter(
+        substitute_perms = committee_perms.filter(
             codename__in=['committee.view', 'committee.view_members']
         )
-        for perm in view_perms:
+        for perm in substitute_perms:
             RolePermission.objects.get_or_create(
                 role=substitute,
                 permission=perm
@@ -118,18 +130,33 @@ def seed_committee_permissions(apps, schema_editor):
     except Role.DoesNotExist:
         pass
     
-    # EXTERNAL_MEMBER and GUEST get only view permission
-    for role_codename in ['EXTERNAL_MEMBER', 'GUEST']:
-        try:
-            role = Role.objects.get(codename=role_codename)
-            view_perm = committee_perms.filter(codename='committee.view')
-            for perm in view_perm:
-                RolePermission.objects.get_or_create(
-                    role=role,
-                    permission=perm
-                )
-        except Role.DoesNotExist:
-            pass
+    # EXTERNAL_MEMBER gets: view, view_members
+    try:
+        external_member = Role.objects.get(codename='EXTERNAL_MEMBER')
+        external_perms = committee_perms.filter(
+            codename__in=['committee.view', 'committee.view_members']
+        )
+        for perm in external_perms:
+            RolePermission.objects.get_or_create(
+                role=external_member,
+                permission=perm
+            )
+    except Role.DoesNotExist:
+        pass
+    
+    # GUEST gets: view, view_members
+    try:
+        guest = Role.objects.get(codename='GUEST')
+        guest_perms = committee_perms.filter(
+            codename__in=['committee.view', 'committee.view_members']
+        )
+        for perm in guest_perms:
+            RolePermission.objects.get_or_create(
+                role=guest,
+                permission=perm
+            )
+    except Role.DoesNotExist:
+        pass
 
 
 def reverse_committee_permissions(apps, schema_editor):

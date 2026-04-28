@@ -31,14 +31,6 @@ def seed_meeting_permissions(apps, schema_editor):
         ('meeting.complete_meeting', 'Sitzung abschließen',
          'Status ändern: IN_PROGRESS → COMPLETED (Sitzung abschließen)', 'meeting'),
         
-        # Additional permissions
-        ('meeting.manage_participants', 'Teilnehmer verwalten',
-         'Teilnehmerliste verwalten', 'meeting'),
-        ('meeting.lead_meeting', 'Sitzung leiten',
-         'Sitzungsleitung übernehmen (verwendet für Default-Vorsitz)', 'meeting'),
-        ('meeting.write_minutes', 'Protokoll schreiben',
-         'Sitzungsprotokoll erstellen (verwendet für Default-Protokollführung)', 'meeting'),
-        
         # Role eligibility permissions
         ('meeting.is_chair', 'Als Sitzungsleitung wählbar',
          'Person kann als Sitzungsleitung ausgewählt werden', 'meeting'),
@@ -70,31 +62,100 @@ def seed_meeting_permissions(apps, schema_editor):
     except Role.DoesNotExist:
         pass
     
-    # Assign is_chair to chair roles
-    chair_roles = ['CHAIR', 'VICE_CHAIR', 'VICE_CHAIR2']
-    is_chair_perm = created_permissions.get('meeting.is_chair')
-    if is_chair_perm:
-        for role_code in chair_roles:
-            try:
-                role = Role.objects.get(codename=role_code)
+    # CHAIR gets: create, view, edit, delete_draft, send_invitation, start_meeting, 
+    #             complete_meeting, is_chair
+    try:
+        chair = Role.objects.get(codename='CHAIR')
+        chair_perm_codes = [
+            'meeting.create', 'meeting.view', 'meeting.edit', 'meeting.delete_draft',
+            'meeting.send_invitation', 'meeting.start_meeting', 'meeting.complete_meeting',
+            'meeting.is_chair'
+        ]
+        for code in chair_perm_codes:
+            perm = created_permissions.get(code)
+            if perm:
                 RolePermission.objects.get_or_create(
-                    role=role,
-                    permission=is_chair_perm
+                    role=chair,
+                    permission=perm
                 )
-            except Role.DoesNotExist:
-                pass
+    except Role.DoesNotExist:
+        pass
     
-    # Assign is_clerk to clerk role
-    is_clerk_perm = created_permissions.get('meeting.is_clerk')
-    if is_clerk_perm:
-        try:
-            clerk_role = Role.objects.get(codename='CLERK')
+    # VICE_CHAIR gets: create, view, edit, delete_draft, send_invitation, start_meeting,
+    #                  complete_meeting, is_chair
+    try:
+        vice_chair = Role.objects.get(codename='VICE_CHAIR')
+        vice_chair_perm_codes = [
+            'meeting.create', 'meeting.view', 'meeting.edit', 'meeting.delete_draft',
+            'meeting.send_invitation', 'meeting.start_meeting', 'meeting.complete_meeting',
+            'meeting.is_chair'
+        ]
+        for code in vice_chair_perm_codes:
+            perm = created_permissions.get(code)
+            if perm:
+                RolePermission.objects.get_or_create(
+                    role=vice_chair,
+                    permission=perm
+                )
+    except Role.DoesNotExist:
+        pass
+    
+    # CLERK gets: create, view, delete_draft, is_clerk
+    try:
+        clerk = Role.objects.get(codename='CLERK')
+        clerk_perm_codes = [
+            'meeting.create', 'meeting.view', 'meeting.delete_draft',
+            'meeting.is_clerk'
+        ]
+        for code in clerk_perm_codes:
+            perm = created_permissions.get(code)
+            if perm:
+                RolePermission.objects.get_or_create(
+                    role=clerk,
+                    permission=perm
+                )
+    except Role.DoesNotExist:
+        pass
+    
+    # MEMBER gets: view
+    # Note: create, edit, delete_draft are conditional (only in Betriebsausschuss)
+    # This will be handled by the permission checking logic in the views/services
+    try:
+        member = Role.objects.get(codename='MEMBER')
+        member_perm_codes = ['meeting.view']
+        for code in member_perm_codes:
+            perm = created_permissions.get(code)
+            if perm:
+                RolePermission.objects.get_or_create(
+                    role=member,
+                    permission=perm
+                )
+    except Role.DoesNotExist:
+        pass
+    
+    # EXTERNAL_MEMBER gets: view
+    try:
+        external_member = Role.objects.get(codename='EXTERNAL_MEMBER')
+        external_perm = created_permissions.get('meeting.view')
+        if external_perm:
             RolePermission.objects.get_or_create(
-                role=clerk_role,
-                permission=is_clerk_perm
+                role=external_member,
+                permission=external_perm
             )
-        except Role.DoesNotExist:
-            pass
+    except Role.DoesNotExist:
+        pass
+    
+    # GUEST gets: view
+    try:
+        guest = Role.objects.get(codename='GUEST')
+        guest_perm = created_permissions.get('meeting.view')
+        if guest_perm:
+            RolePermission.objects.get_or_create(
+                role=guest,
+                permission=guest_perm
+            )
+    except Role.DoesNotExist:
+        pass
 
 
 def reverse_seed_permissions(apps, schema_editor):
