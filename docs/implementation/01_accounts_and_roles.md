@@ -562,39 +562,70 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 ---
 
-### Schritt 2.2: roles - Berechtigungen definieren
+### Schritt 2.2: roles - Berechtigungen und Rollen per Migration erstellen
 
-**Datei:** `apps/roles/management/commands/seed_permissions.py`
+**Datei:** `apps/roles/migrations/9999_seed_roles_and_permissions.py`
 
 **Funktionalität:**
-- Django Management Command
-- help = 'Erstellt Standard-Berechtigungen für alle Apps'
+- Data Migration (RunPython)
+- Erstellt Permissions, Roles und deren Zuordnungen in einem Schritt
+- Reverse-Funktion zum Rückgängigmachen implementiert
 
-**Berechtigungen zu erstellen (Liste von Tupeln):**
+**Berechtigungen zu erstellen:**
 
 **System-Berechtigungen:**
-- `system.admin` - "Systemweiter Admin-Zugriff"
-- `system.manage_users` - "Benutzer verwalten"
+- `system.admin` - "Systemweiter Admin-Zugriff" - "Voller Zugriff auf alle System-Funktionen"
+- `system.manage_users` - "Benutzer verwalten" - "Benutzer erstellen, bearbeiten und löschen"
 
 **Rollen-Berechtigungen:**
-- `role.create` - "Rolle erstellen"
-- `role.edit` - "Rolle bearbeiten"
-- `role.delete` - "Rolle löschen"
-- `role.assign_permissions` - "Berechtigungen zuweisen"
-- `role.view` - "Rollen einsehen"
-- `role.assign_to_member` - "Rolle zuweisen"
+- `role.create` - "Rolle erstellen" - "Neue Rollen anlegen"
+- `role.edit` - "Rolle bearbeiten" - "Existierende Rollen bearbeiten"
+- `role.delete` - "Rolle löschen" - "Rollen löschen (außer System-Rollen)"
+- `role.assign_permissions` - "Berechtigungen zuweisen" - "Berechtigungen zu Rollen hinzufügen oder entfernen"
+- `role.view` - "Rollen einsehen" - "Liste aller Rollen anzeigen"
+- `role.assign_to_member` - "Rolle zuweisen" - "Rollen an Gremiumsmitglieder zuweisen"
 
-**Implementierung:**
-- Loop über Liste: Permission.objects.get_or_create()
-- Output mit self.stdout.write() und self.style.SUCCESS()
-- Counter für erstellte Permissions
+**System-Rollen zu erstellen:**
+- `SYSTEM_ADMIN` - "System-Administrator" - "Vollständige System-Administration" (SYSTEM, sort_order=1)
+- `USER` - "Benutzer" - "Standard-Benutzer ohne besondere Rechte" (SYSTEM, sort_order=100)
 
-**Ausführen:**
+**Gremiums-Rollen zu erstellen:**
+- `CHAIR` - "Vorsitz" - "Vorsitzender des Gremiums" (COMMITTEE, sort_order=1, auto_include_in_ba=True)
+- `VICE_CHAIR` - "Stellv. Vorsitz" - "Stellvertretender Vorsitzender" (COMMITTEE, sort_order=2, auto_include_in_ba=True)
+- `CLERK` - "Schriftführung" - "Schriftführer des Gremiums" (COMMITTEE, sort_order=10, auto_include_in_ba=False)
+- `MEMBER` - "Mitglied" - "Reguläres Gremiumsmitglied" (COMMITTEE, sort_order=20, auto_include_in_ba=False)
+- `SUBSTITUTE` - "Ersatzmitglied" - "Ersatzmitglied für reguläre Mitglieder" (COMMITTEE, sort_order=30, auto_include_in_ba=False)
+- `EXTERNAL_MEMBER` - "Externes Mitglied" - "Externes Mitglied ohne Stimmrecht" (COMMITTEE, sort_order=40, auto_include_in_ba=False)
+- `GUEST` - "Gast" - "Gast ohne Stimmrecht" (COMMITTEE, sort_order=50, auto_include_in_ba=False)
+
+**Implementierung in 3 Schritten:**
+
+**STEP 1: Create Permissions**
+- Loop über PERMISSIONS-Liste: Permission.objects.get_or_create()
+- Felder: codename, name, description, category
+
+**STEP 2: Create Roles**
+- Loop über SYSTEM_ROLES und COMMITTEE_ROLES
+- Role.objects.get_or_create() mit allen Feldern
+- Bei committee roles: auto_include_in_ba aktualisieren falls bereits existent
+
+**STEP 3: Assign ALL Permissions to SYSTEM_ADMIN**
+- SYSTEM_ADMIN Rolle laden
+- Alle Permissions abrufen
+- Für jede Permission: RolePermission.objects.get_or_create()
+
+**Reverse-Funktion:**
+- Löscht alle RolePermissions für system/role category
+- Löscht alle Permissions mit category='system' oder 'role'
+- Löscht alle Roles mit den definierten codenames
+
+**Migration ausführen:**
 ```bash
-python manage.py seed_permissions
+python manage.py makemigrations roles
+python manage.py migrate roles 9999
 ```
 
-**Siehe:** CODE_STYLE_GUIDE.md → "Clean Code Principles → Functions"
+**Siehe:** CODE_STYLE_GUIDE.md → "Django Best Practices → Data Migrations"
 
 ---
 
@@ -602,77 +633,38 @@ python manage.py seed_permissions
 
 **Tests zu implementieren:**
 
-1. **test_seed_permissions_command**
-   - Management Command ausführen
+1. **test_migration_creates_permissions**
+   - Migration ausführen (oder DB-State nach Migration prüfen)
    - Assert: Alle erwarteten Permissions existieren in DB
 
-2. **test_seed_permissions_idempotent**
-   - Command zweimal ausführen
-   - Assert: Keine Duplikate, gleiche Anzahl
-
-3. **test_permission_categorization**
-   - Permissions nach category filtern
-   - Assert: system.* und role.* Permissions korrekt kategorisiert
-
-**Siehe:** CODE_STYLE_GUIDE.md → "Django Best Practices → Testing"
-
----
-
-### Schritt 2.3: roles - Standard-Rollen anlegen
-
-**Datei:** `apps/roles/management/commands/seed_roles.py`
-
-**Funktionalität:**
-- Django Management Command
-- help = 'Erstellt Standard-Rollen (System + Gremien)'
-
-**System-Rollen zu erstellen:**
-- `SYSTEM_ADMIN` - "System-Administrator" (SYSTEM)
-- `USER` - "Benutzer" (SYSTEM)
-
-**Gremiums-Rollen zu erstellen:**
-- `CHAIR` - "Vorsitz" (COMMITTEE)
-- `VICE_CHAIR` - "Stellv. Vorsitz" (COMMITTEE)
-- `MEMBER` - "Mitglied" (COMMITTEE)
-- `CLERK` - "Schriftführung" (COMMITTEE)
-- `SUBSTITUTE` - "Ersatzmitglied" (COMMITTEE)
-- `EXTERNAL_MEMBER` - "Externes Mitglied" (COMMITTEE)
-- `GUEST` - "Gast" (COMMITTEE)
-
-**Zusätzlich:**
-- SYSTEM_ADMIN bekommt ALLE Permissions mit category='system'
-- Via RolePermission.objects.get_or_create()
-
-**Ausführen:**
-```bash
-python manage.py seed_roles
-```
-
----
-
-**Datei:** `apps/roles/tests/test_permissions.py` ergänzen
-
-**Zusätzliche Tests:**
-
-4. **test_seed_roles_command**
-   - Management Command ausführen
+2. **test_migration_creates_roles**
    - Assert: Alle System- und Gremiums-Rollen existieren
 
-5. **test_seed_roles_idempotent**
-   - Command zweimal ausführen
-   - Assert: Keine Duplikate
-
-6. **test_system_admin_has_all_system_permissions**
+3. **test_system_admin_has_all_permissions**
    - SYSTEM_ADMIN Rolle laden
-   - Assert: Hat alle Permissions mit category='system'
+   - Assert: Hat ALLE Permissions zugewiesen (nicht nur system)
 
-7. **test_system_roles_marked_correctly**
+4. **test_system_roles_marked_correctly**
    - System-Rollen prüfen
    - Assert: is_system_role=True
 
-8. **test_committee_roles_created**
+5. **test_committee_roles_created_with_correct_attributes**
    - Alle Gremiums-Rollen prüfen
-   - Assert: CHAIR, VICE_CHAIR, MEMBER, etc. existieren mit role_type='COMMITTEE'
+   - Assert: CHAIR, VICE_CHAIR haben auto_include_in_ba=True
+   - Assert: Andere Committee-Roles haben auto_include_in_ba=False
+   - Assert: sort_order korrekt gesetzt
+
+6. **test_permission_categorization**
+   - Permissions nach category filtern
+   - Assert: system.* und role.* Permissions korrekt kategorisiert
+
+7. **test_migration_is_idempotent**
+   - Migration-Funktion zweimal aufrufen (simuliert)
+   - Assert: Keine Duplikate, gleiche Anzahl
+
+8. **test_reverse_migration_cleans_up**
+   - Reverse-Funktion testen
+   - Assert: Alle erstellten Daten werden entfernt
 
 **Siehe:** CODE_STYLE_GUIDE.md → "Django Best Practices → Testing"
 
