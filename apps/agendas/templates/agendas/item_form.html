@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if is_create %}
+        Neuen TOP erstellen
+    {% else %}
+        TOP bearbeiten
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-lg-8 offset-lg-2">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        {% if is_create %}
+                            <i class="bi bi-plus-circle"></i> Neuen Tagesordnungspunkt erstellen
+                        {% else %}
+                            <i class="bi bi-pencil"></i> Tagesordnungspunkt bearbeiten
+                        {% endif %}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Info box -->
+                    <div class="alert alert-info" role="alert">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Hinweis:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Die TOP-Nummer wird automatisch berechnet</li>
+                            <li>Wählen Sie einen übergeordneten TOP für hierarchische Struktur (z.B. TOP 1.1, 1.2)</li>
+                            <li>Die Reihenfolge können Sie später per Drag & Drop ändern</li>
+                        </ul>
+                    </div>
+
+                    <!-- Form -->
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'meetings:meeting_detail' agenda.meeting.pk %}" 
+                               class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i>
+                                {% if is_create %}
+                                    TOP erstellen
+                                {% else %}
+                                    Änderungen speichern
+                                {% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

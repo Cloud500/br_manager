@@ -1,0 +1,56 @@
+{% load agenda_tags %}
+<!-- Single Agenda Item -->
+<li class="list-group-item agenda-item" data-item-id="{{ item.pk }}">
+    <div class="d-flex align-items-start">
+        <!-- Drag Handle (only if can_reorder) -->
+        {% if can_reorder %}
+            <div class="drag-handle me-2" style="cursor: move;">
+                <i class="bi bi-grip-vertical text-muted"></i>
+            </div>
+        {% endif %}
+        
+        <!-- Item Number -->
+        <div class="item-number me-3">
+            <strong>{{ item.item_number }}</strong>
+        </div>
+        
+        <!-- Item Content -->
+        <div class="flex-grow-1">
+            <div class="item-title">
+                <strong>{{ item.title }}</strong>
+            </div>
+            {% if item.description %}
+                <div class="item-description text-muted small mt-1">
+                    {{ item.description|linebreaks }}
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Actions (only if editable) -->
+        <div class="ms-2">
+            <div class="btn-group btn-group-sm" role="group">
+                {% if can_edit %}
+                    <a href="{% url 'agendas:item_update' item.pk %}" 
+                       class="btn btn-outline-primary" 
+                       title="Bearbeiten">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                {% endif %}
+                {% if can_delete %}
+                    <a href="{% url 'agendas:item_delete' item.pk %}" 
+                       class="btn btn-outline-danger" 
+                       title="Löschen">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Nested Items Container (always present for drag & drop) -->
+    <ul class="list-group mt-2 ms-4 agenda-items-sortable" style="min-height: 0;">
+        {% for child in item.children.all %}
+            {% include 'agendas/includes/agenda_item.html' with item=child can_edit=can_edit can_delete=can_delete can_reorder=can_reorder %}
+        {% endfor %}
+    </ul>
+</li>
