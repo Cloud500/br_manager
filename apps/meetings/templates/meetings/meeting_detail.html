@@ -286,28 +286,38 @@
             <div class="card-body">
                 {% if meeting.has_agenda %}
                     {% if meeting.agenda.agendaitemregular_items.exists %}
-                        <!-- Loading Indicator -->
-                        <div id="loading-indicator" class="alert alert-info d-none">
-                            <i class="bi bi-arrow-repeat spin"></i> Speichert Reihenfolge...
-                        </div>
-                        
-                        <!-- Agenda Items List -->
-                        <ul id="agenda-items-list" 
-                            class="list-group agenda-items-sortable" 
-                            data-agenda-id="{{ meeting.agenda.pk }}"
-                            data-reorder-url="{% url 'agendas:reorder_items' meeting.agenda.pk %}">
-                            {% for item in meeting.agenda.agendaitemregular_items.all %}
-                                {% if not item.parent %}
-                                    {% include 'agendas/includes/agenda_item.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_reorder=user_can_reorder_items %}
-                                {% endif %}
-                            {% endfor %}
-                        </ul>
-                        
                         {% if user_can_reorder_items and meeting.agenda.is_editable %}
+                            <!-- Editable View with Drag & Drop -->
+                            <!-- Loading Indicator -->
+                            <div id="loading-indicator" class="alert alert-info d-none">
+                                <i class="bi bi-arrow-repeat spin"></i> Speichert Reihenfolge...
+                            </div>
+                            
+                            <!-- Agenda Items List -->
+                            <ul id="agenda-items-list" 
+                                class="list-group agenda-items-sortable" 
+                                data-agenda-id="{{ meeting.agenda.pk }}"
+                                data-reorder-url="{% url 'agendas:reorder_items' meeting.agenda.pk %}">
+                                {% for item in meeting.agenda.agendaitemregular_items.all %}
+                                    {% if not item.parent %}
+                                        {% include 'agendas/includes/agenda_item.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_reorder=user_can_reorder_items %}
+                                    {% endif %}
+                                {% endfor %}
+                            </ul>
+                            
                             <div class="alert alert-info mt-3 mb-0">
                                 <i class="bi bi-info-circle"></i> 
                                 Tipp: Ziehen Sie Punkte per Drag & Drop, um die Reihenfolge zu ändern. Die Nummerierung wird automatisch aktualisiert.
                             </div>
+                        {% else %}
+                            <!-- Read-Only View (clean list format) -->
+                            <ol class="agenda-items-readonly">
+                                {% for item in meeting.agenda.agendaitemregular_items.all %}
+                                    {% if not item.parent %}
+                                        {% include 'agendas/includes/agenda_item_readonly.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item %}
+                                    {% endif %}
+                                {% endfor %}
+                            </ol>
                         {% endif %}
                     {% else %}
                         <div class="alert alert-info mb-0">

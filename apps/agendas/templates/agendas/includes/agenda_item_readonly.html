@@ -1,0 +1,42 @@
+{% load agenda_tags %}
+<!-- Read-Only Agenda Item (clean list view) -->
+<li>
+    <div class="item-content-readonly">
+        <strong>{{ item.title }}</strong>
+        
+        <!-- View/Edit buttons (if user can edit but not reorder) -->
+        {% if can_edit or can_delete %}
+            <span class="item-actions-readonly">
+                {% if can_edit %}
+                    <a href="{% url 'agendas:item_update' item.pk %}" 
+                       class="btn btn-sm btn-outline-primary" 
+                       title="Bearbeiten">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                {% endif %}
+                {% if can_delete %}
+                    <a href="{% url 'agendas:item_delete' item.pk %}" 
+                       class="btn btn-sm btn-outline-danger" 
+                       title="Löschen">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                {% endif %}
+            </span>
+        {% endif %}
+    </div>
+    
+    {% if item.description %}
+        <div class="item-description-readonly">
+            {{ item.description|linebreaks }}
+        </div>
+    {% endif %}
+    
+    <!-- Nested Items -->
+    {% if item.children.exists %}
+        <ol>
+            {% for child in item.children.all %}
+                {% include 'agendas/includes/agenda_item_readonly.html' with item=child can_edit=can_edit can_delete=can_delete %}
+            {% endfor %}
+        </ol>
+    {% endif %}
+</li>
