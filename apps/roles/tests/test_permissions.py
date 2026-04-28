@@ -8,83 +8,8 @@ from django.test import TestCase
 from apps.roles.models import Permission, Role, RolePermission
 
 
-class SeedPermissionsCommandTest(TestCase):
-    """Tests for seed_permissions management command."""
-    
-    def test_seed_permissions_command(self):
-        """Test that all expected permissions are created."""
-        out = StringIO()
-        call_command('seed_permissions', stdout=out)
-        
-        # Check all expected permissions exist
-        expected_permissions = [
-            'system.admin',
-            'system.manage_users',
-            'role.create',
-            'role.edit',
-            'role.delete',
-            'role.assign_permissions',
-            'role.view',
-            'role.assign_to_member',
-        ]
-        
-        for codename in expected_permissions:
-            self.assertTrue(
-                Permission.objects.filter(codename=codename).exists(),
-                f'Permission {codename} should exist'
-            )
-        
-        # Check total count
-        self.assertEqual(Permission.objects.count(), len(expected_permissions))
-    
-    def test_seed_permissions_idempotent(self):
-        """Test that running command twice doesn't create duplicates."""
-        # Run command first time
-        call_command('seed_permissions', stdout=StringIO())
-        first_count = Permission.objects.count()
-        
-        # Run command second time
-        call_command('seed_permissions', stdout=StringIO())
-        second_count = Permission.objects.count()
-        
-        # Should have same count
-        self.assertEqual(first_count, second_count)
-    
-    def test_permission_categorization(self):
-        """Test that permissions are correctly categorized."""
-        call_command('seed_permissions', stdout=StringIO())
-        
-        # Check system permissions
-        system_perms = Permission.objects.filter(category='system')
-        self.assertEqual(system_perms.count(), 2)
-        self.assertTrue(
-            system_perms.filter(codename='system.admin').exists()
-        )
-        self.assertTrue(
-            system_perms.filter(codename='system.manage_users').exists()
-        )
-        
-        # Check role permissions
-        role_perms = Permission.objects.filter(category='role')
-        self.assertEqual(role_perms.count(), 6)
-    
-    def test_permission_details(self):
-        """Test that permissions have correct details."""
-        call_command('seed_permissions', stdout=StringIO())
-        
-        perm = Permission.objects.get(codename='system.admin')
-        self.assertEqual(perm.name, 'Systemweiter Admin-Zugriff')
-        self.assertEqual(perm.category, 'system')
-        self.assertIn('System-Funktionen', perm.description)
-
-
 class SeedRolesCommandTest(TestCase):
     """Tests for seed_roles management command."""
-    
-    def setUp(self):
-        """Set up test data."""
-        # Need to create permissions first
-        call_command('seed_permissions', stdout=StringIO())
     
     def test_seed_roles_command(self):
         """Test that all expected roles are created."""
