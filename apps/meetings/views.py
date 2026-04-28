@@ -329,7 +329,7 @@ def get_committee_members_ajax(request, committee_id):
         memberships = Membership.objects.filter(
             committee=committee,
             is_active=True
-        ).select_related('user', 'user__profile', 'role', 'role__permissions').order_by('role__sort_order', 'user__last_name', 'user__first_name')
+        ).select_related('user', 'user__profile', 'role').prefetch_related('role__permissions').order_by('role__sort_order', 'user__last_name', 'user__first_name')
         
         # Build separate lists for chair and clerk
         chair_candidates = []

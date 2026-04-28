@@ -560,6 +560,30 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Re-attach event listeners
         attachMemberOptionListeners();
+        
+        // Auto-select first chair if available
+        if (chairCandidates.length > 0) {
+            const firstChair = chairCandidates[0];
+            document.getElementById('id_chair').value = firstChair.id;
+            document.getElementById('selectedChairText').textContent = firstChair.name;
+            // Mark first option as active
+            const firstChairOption = document.querySelector('.member-option[data-field="chair"]');
+            if (firstChairOption) {
+                firstChairOption.classList.add('active');
+            }
+        }
+        
+        // Auto-select first clerk if available
+        if (clerkCandidates.length > 0) {
+            const firstClerk = clerkCandidates[0];
+            document.getElementById('id_clerk').value = firstClerk.id;
+            document.getElementById('selectedClerkText').textContent = firstClerk.name;
+            // Mark first option as active
+            const firstClerkOption = document.querySelector('.member-option[data-field="clerk"]');
+            if (firstClerkOption) {
+                firstClerkOption.classList.add('active');
+            }
+        }
     }
     
     function attachMemberOptionListeners() {
