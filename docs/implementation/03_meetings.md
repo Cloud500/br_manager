@@ -133,12 +133,12 @@ touch apps/meetings/mixins.py
 - `status`: CharField(20, choices=STATUS_CHOICES, default='DRAFT')
 - `is_quorate`: BooleanField(null=True, blank=True, verbose_name='Beschlussfähig')
 - `chair`: ForeignKey('accounts.User', SET_NULL, null=True, blank=True, related_name='chaired_meetings', verbose_name='Vorsitz')
-  - **Wichtig:** Dynamische Auswahl aus allen aktiven Committee-Mitgliedern
-  - **Standard:** User mit meeting.lead_meeting Permission (z.B. CHAIR-Rolle)
-  - **Änderbar:** Kann bei Bedarf auf jedes Mitglied gesetzt werden (z.B. "2. Stellvertreter")
+  - **Wichtig:** Dynamische Auswahl aus allen aktiven Committee-Mitgliedern mit `meeting.is_chair` Permission
+  - **Standard:** Erster User in der Liste (sortiert nach `role.sort_order`)
+  - **Änderbar:** Kann bei Bedarf auf jedes berechtigte Mitglied gesetzt werden
 - `clerk`: ForeignKey('accounts.User', SET_NULL, null=True, blank=True, related_name='clerked_meetings', verbose_name='Protokollführung')
-  - **Wichtig:** Dynamische Auswahl aus allen aktiven Committee-Mitgliedern
-  - **Standard:** User mit entsprechender Permission
+  - **Wichtig:** Dynamische Auswahl aus allen aktiven Committee-Mitgliedern mit `meeting.is_clerk` Permission
+  - **Standard:** Erster User in der Liste (sortiert nach `role.sort_order`)
   - **Änderbar:** Kann bei Bedarf geändert werden
 - `created_by`: ForeignKey('accounts.User', SET_NULL, null=True, related_name='created_meetings', verbose_name='Erstellt von')
 - `created_at`: DateTimeField(default=timezone.now)
@@ -167,8 +167,6 @@ touch apps/meetings/mixins.py
 - `is_deletable()`: Property - Prüft ob löschbar (status='DRAFT')
 - `can_send_invitation()`: Property - Prüft ob Einladung versendbar (status='DRAFT')
 - `can_complete()`: Property - Prüft ob abschließbar (status='IN_PROGRESS')
-- `get_default_chair(committee)`: Static method - Gibt Standard-Vorsitzenden zurück (User mit meeting.lead_meeting Permission)
-- `get_default_clerk(committee)`: Static method - Gibt Standard-Protokollführung zurück (User mit meeting.write_minutes Permission)
 - `user_can_create(user, committee)`: Static method - Prüft ob User Meeting für Committee erstellen darf
 - `user_can_send_invitation(user, meeting)`: Static method - Prüft ob User Einladung versenden darf (DRAFT → SENT)
 - `user_can_start_meeting(user, meeting)`: Static method - Prüft ob User Meeting starten darf (SENT → IN_PROGRESS)
@@ -339,64 +337,6 @@ from typing import Optional
 from apps.committees.models import Membership
 
 @staticmethod
-def get_default_chair(committee: 'Committee') -> Optional['User']:
-    """
-    Get the default chair for a committee.
-    
-    Returns the first active member with 'meeting.lead_meeting' permission.
-    Typically this would be the user with CHAIR role, but can be any role
-    that has this permission.
-    
-    Args:
-        committee: Committee instance
-    
-    Returns:
-        User instance or None
-    """
-    memberships = Membership.objects.filter(
-        committee=committee,
-        is_active=True
-    ).select_related('role', 'user')
-    
-    for membership in memberships:
-        if membership.role:
-            has_permission = membership.role.permissions.filter(
-                codename='meeting.lead_meeting'
-            ).exists()
-            
-            if has_permission:
-                return membership.user
-    
-    return None
-
-@staticmethod
-def get_default_clerk(committee: 'Committee') -> Optional['User']:
-    """
-    Get the default clerk for a committee.
-    
-    Returns the first active member with 'meeting.write_minutes' permission.
-    
-    Args:
-        committee: Committee instance
-    
-    Returns:
-        User instance or None
-    """
-    memberships = Membership.objects.filter(
-        committee=committee,
-        is_active=True
-    ).select_related('role', 'user')
-    
-    for membership in memberships:
-        if membership.role:
-            has_permission = membership.role.permissions.filter(
-                codename='meeting.write_minutes'
-            ).exists()
-            
-            if has_permission:
-                return membership.user
-    
-    return None
 ```
 
 **Business Logic Properties & Methods:**
@@ -728,41 +668,29 @@ python manage.py migrate
     - Meeting mit chair == clerk (sollte erlaubt sein)
     - Assert: Erfolgreich gespeichert
 
-21. **test_get_default_chair_returns_user_with_lead_permission**
-    - Committee mit User der meeting.lead_meeting Permission hat
-    - Assert: get_default_chair(committee) == dieser User
-
-22. **test_get_default_chair_returns_none_if_no_permission**
-    - Committee ohne User mit meeting.lead_meeting Permission
-    - Assert: get_default_chair(committee) == None
-
-23. **test_get_default_clerk_returns_user_with_minutes_permission**
-    - Committee mit User der meeting.write_minutes Permission hat
-    - Assert: get_default_clerk(committee) == dieser User
-
 #### Property Tests
 
-24. **test_is_upcoming_for_future_meeting**
+21. **test_is_upcoming_for_future_meeting**
     - Meeting mit Datum in 7 Tagen
     - Assert: is_upcoming = True
 
-25. **test_is_past_for_past_meeting**
+22. **test_is_past_for_past_meeting**
     - Meeting mit Datum vor 7 Tagen
     - Assert: is_past = True
 
-26. **test_is_editable_only_in_draft**
+23. **test_is_editable_only_in_draft**
     - Meeting mit status='DRAFT'
     - Assert: is_editable = True
     - Meeting mit status='COMPLETED'
     - Assert: is_editable = False
 
-27. **test_is_deletable_only_in_draft**
+24. **test_is_deletable_only_in_draft**
     - Meeting mit status='DRAFT'
     - Assert: is_deletable = True
     - Andere Status
     - Assert: is_deletable = False
 
-28. **test_can_send_invitation_only_in_draft**
+25. **test_can_send_invitation_only_in_draft**
     - Meeting mit status='DRAFT'
     - Assert: can_send_invitation = True
     - Meeting mit status='SENT'
@@ -770,7 +698,7 @@ python manage.py migrate
     - Meeting mit status='IN_PROGRESS'
     - Assert: can_send_invitation = False
 
-29. **test_can_complete_only_in_progress**
+26. **test_can_complete_only_in_progress**
     - Meeting mit status='IN_PROGRESS'
     - Assert: can_complete = True
     - Meeting mit status='DRAFT'
@@ -936,25 +864,24 @@ Basis-Verwaltung über Django Admin aktivieren.
 **Beispiel-Konfiguration:**
 ```
 CHAIR-Rolle:
-  - meeting.create, meeting.view, meeting.edit
+  - meeting.create, meeting.view, meeting.edit, meeting.delete_draft
   - meeting.send_invitation, meeting.start_meeting, meeting.complete_meeting
-  - meeting.lead_meeting
+  - meeting.is_chair
 
 VICE_CHAIR-Rolle:
-  - meeting.create, meeting.view, meeting.edit
+  - meeting.create, meeting.view, meeting.edit, meeting.delete_draft
   - meeting.send_invitation, meeting.start_meeting, meeting.complete_meeting
-  - meeting.lead_meeting
+  - meeting.is_chair
 
-"2. STELLVERTRETER"-Rolle:
-  - meeting.view
-  - meeting.start_meeting, meeting.complete_meeting
-  - meeting.lead_meeting
+CLERK-Rolle:
+  - meeting.create, meeting.view, meeting.delete_draft
+  - meeting.is_clerk
 
 MEMBER-Rolle:
   - meeting.view
 
-GUEST-Rolle (Externe/Gäste):
-  - meeting.view (oder auch nicht, wenn vertraulich)
+EXTERNAL_MEMBER/GUEST-Rolle:
+  - meeting.view
 ```
 
 **Implementierung:**
