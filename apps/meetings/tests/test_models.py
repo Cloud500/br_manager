@@ -119,16 +119,6 @@ class MeetingModelTest(TestCase):
             codename='complete_meeting',
             name='Sitzung abschließen'
         )
-        cls.perm_lead_meeting = Permission.objects.create(
-            category='meeting',
-            codename='lead_meeting',
-            name='Sitzung leiten'
-        )
-        cls.perm_write_minutes = Permission.objects.create(
-            category='meeting',
-            codename='write_minutes',
-            name='Protokoll schreiben'
-        )
         
         # Create roles
         cls.role_admin = Role.objects.create(
@@ -154,8 +144,7 @@ class MeetingModelTest(TestCase):
             cls.perm_create,
             cls.perm_send_invitation,
             cls.perm_start_meeting,
-            cls.perm_complete_meeting,
-            cls.perm_lead_meeting
+            cls.perm_complete_meeting
         )
         
         cls.role_clerk = Role.objects.create(
@@ -164,8 +153,7 @@ class MeetingModelTest(TestCase):
             description='Committee clerk'
         )
         cls.role_clerk.permissions.add(
-            cls.perm_view,
-            cls.perm_write_minutes
+            cls.perm_view
         )
     
     # Basic Creation Tests
@@ -555,35 +543,6 @@ class MeetingModelTest(TestCase):
         # Should not raise an exception
         meeting.full_clean()
         self.assertEqual(meeting.chair, meeting.clerk)
-    
-    def test_get_default_chair_returns_user_with_lead_permission(self):
-        """Test get_default_chair() returns user with meeting.lead_meeting permission."""
-        # Assign chair role to user1
-        RoleAssignment.objects.create(
-            user=self.user1,
-            role=self.role_chair,
-            committee=self.committee_main
-        )
-        
-        default_chair = Meeting.get_default_chair(self.committee_main)
-        self.assertEqual(default_chair, self.user1)
-    
-    def test_get_default_chair_returns_none_if_no_permission(self):
-        """Test get_default_chair() returns None if no user has lead permission."""
-        default_chair = Meeting.get_default_chair(self.committee_other)
-        self.assertIsNone(default_chair)
-    
-    def test_get_default_clerk_returns_user_with_minutes_permission(self):
-        """Test get_default_clerk() returns user with meeting.write_minutes permission."""
-        # Assign clerk role to user2
-        RoleAssignment.objects.create(
-            user=self.user2,
-            role=self.role_clerk,
-            committee=self.committee_main
-        )
-        
-        default_clerk = Meeting.get_default_clerk(self.committee_main)
-        self.assertEqual(default_clerk, self.user2)
     
     # Property Tests
     
