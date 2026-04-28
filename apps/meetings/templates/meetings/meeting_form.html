@@ -423,18 +423,44 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateLocationFields() {
         const selectedType = meetingTypeSelect.value;
         
-        // Hide all first
+        // Get location field elements
+        const locationUrlField = document.getElementById('id_location_url');
+        const locationNameField = document.getElementById('id_location_name');
+        const locationStreetField = document.getElementById('id_location_street');
+        const locationZipField = document.getElementById('id_location_zip');
+        const locationCityField = document.getElementById('id_location_city');
+        const locationRoomField = document.getElementById('id_location_room');
+        
+        // Hide all first and remove all required attributes
         onlineFields.style.display = 'none';
         addressFields.style.display = 'none';
         
-        // Show based on type
+        // Remove all required attributes
+        locationUrlField.removeAttribute('required');
+        locationNameField.removeAttribute('required');
+        locationStreetField.removeAttribute('required');
+        locationZipField.removeAttribute('required');
+        locationCityField.removeAttribute('required');
+        locationRoomField.removeAttribute('required');
+        
+        // Show based on type and set required attributes
         if (selectedType === 'ONLINE') {
             onlineFields.style.display = 'block';
+            locationUrlField.setAttribute('required', 'required');
         } else if (selectedType === 'IN_PERSON') {
             addressFields.style.display = 'block';
+            locationNameField.setAttribute('required', 'required');
+            locationStreetField.setAttribute('required', 'required');
+            locationZipField.setAttribute('required', 'required');
+            locationCityField.setAttribute('required', 'required');
         } else if (selectedType === 'HYBRID') {
             onlineFields.style.display = 'block';
             addressFields.style.display = 'block';
+            locationUrlField.setAttribute('required', 'required');
+            locationNameField.setAttribute('required', 'required');
+            locationStreetField.setAttribute('required', 'required');
+            locationZipField.setAttribute('required', 'required');
+            locationCityField.setAttribute('required', 'required');
         }
     }
     

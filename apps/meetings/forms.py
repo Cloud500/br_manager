@@ -60,29 +60,14 @@ class MeetingForm(forms.ModelForm):
         """Initialize form with dynamic field visibility."""
         super().__init__(*args, **kwargs)
         
-        # Get meeting_type from instance or initial data
-        meeting_type = self.instance.meeting_type if self.instance.pk else self.initial.get('meeting_type', 'IN_PERSON')
-        
-        # Set required fields based on meeting_type (JavaScript will handle visibility)
-        if meeting_type == 'ONLINE':
-            # Online: location_url required, address fields not required
-            self.fields['location_url'].required = True
-            for field in ['location_name', 'location_street', 'location_zip', 'location_city', 'location_room']:
-                self.fields[field].required = False
-        
-        elif meeting_type == 'IN_PERSON':
-            # In-person: address required, location_url not required
-            self.fields['location_url'].required = False
-            for field in ['location_name', 'location_street', 'location_zip', 'location_city']:
-                self.fields[field].required = True
-            self.fields['location_room'].required = False
-        
-        elif meeting_type == 'HYBRID':
-            # Hybrid: both required
-            self.fields['location_url'].required = True
-            for field in ['location_name', 'location_street', 'location_zip', 'location_city']:
-                self.fields[field].required = True
-            self.fields['location_room'].required = False
+        # Don't set required attributes in __init__ - let JavaScript and clean() handle it
+        # This prevents validation errors when user changes meeting_type
+        self.fields['location_url'].required = False
+        self.fields['location_name'].required = False
+        self.fields['location_street'].required = False
+        self.fields['location_zip'].required = False
+        self.fields['location_city'].required = False
+        self.fields['location_room'].required = False
         
         # Hide is_quorate field if not IN_PROGRESS or COMPLETED
         meeting_status = self.instance.status if self.instance.pk else 'DRAFT'
@@ -143,8 +128,44 @@ class MeetingForm(forms.ModelForm):
         """Validate form data."""
         cleaned_data = super().clean()
         
-        # Additional form-level validation can go here
-        # (Model.clean() already handles most validation)
+        # Get meeting_type from cleaned data
+        meeting_type = cleaned_data.get('meeting_type', 'IN_PERSON')
+        
+        # Validate based on meeting_type
+        if meeting_type == 'ONLINE':
+            # Online: location_url required, address fields not required
+            if not cleaned_data.get('location_url'):
+                self.add_error('location_url', 'Online-Link ist erforderlich für Online-Sitzungen')
+            
+            # Clear address field errors and values
+            for field in ['location_name', 'location_street', 'location_zip', 'location_city', 'location_room']:
+                if field in self.errors:
+                    del self.errors[field]
+                cleaned_data[field] = ''
+        
+        elif meeting_type == 'IN_PERSON':
+            # In-person: address required, location_url not required
+            required_address_fields = ['location_name', 'location_street', 'location_zip', 'location_city']
+            for field in required_address_fields:
+                if not cleaned_data.get(field):
+                    field_label = self.fields[field].label
+                    self.add_error(field, f'{field_label} ist erforderlich für Präsenzsitzungen')
+            
+            # Clear URL field error and value
+            if 'location_url' in self.errors:
+                del self.errors['location_url']
+            cleaned_data['location_url'] = ''
+        
+        elif meeting_type == 'HYBRID':
+            # Hybrid: both URL and address required
+            if not cleaned_data.get('location_url'):
+                self.add_error('location_url', 'Online-Link ist erforderlich für Hybrid-Sitzungen')
+            
+            required_address_fields = ['location_name', 'location_street', 'location_zip', 'location_city']
+            for field in required_address_fields:
+                if not cleaned_data.get(field):
+                    field_label = self.fields[field].label
+                    self.add_error(field, f'{field_label} ist erforderlich für Hybrid-Sitzungen')
         
         return cleaned_data
 
