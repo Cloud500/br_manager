@@ -37,8 +37,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 ghostClass: 'sortable-ghost',
                 chosenClass: 'sortable-chosen',
                 dragClass: 'sortable-drag',
+                onStart: handleDragStart,
                 onEnd: handleDragEnd
             });
+        });
+    }
+    
+    /**
+     * Handle drag start event - highlight all drop zones
+     * 
+     * @param {Event} evt - Sortable event
+     */
+    function handleDragStart(evt) {
+        // Add class to body to indicate dragging is active
+        document.body.classList.add('drag-active');
+        
+        // Highlight all sortable lists as drop zones
+        const allLists = document.querySelectorAll('.agenda-items-sortable');
+        allLists.forEach(list => {
+            list.classList.add('drop-zone-highlight');
         });
     }
     
@@ -48,6 +65,16 @@ document.addEventListener('DOMContentLoaded', function() {
      * @param {Event} evt - Sortable event
      */
     function handleDragEnd(evt) {
+        // Remove drag-active class from body
+        document.body.classList.remove('drag-active');
+        
+        // Remove highlight from all drop zones
+        const allLists = document.querySelectorAll('.agenda-items-sortable');
+        allLists.forEach(list => {
+            list.classList.remove('drop-zone-highlight');
+        });
+        
+        // Save the new order
         const itemOrder = collectItemOrder();
         saveItemOrder(itemOrder);
     }
