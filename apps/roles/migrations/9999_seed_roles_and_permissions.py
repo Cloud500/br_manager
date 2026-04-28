@@ -57,9 +57,9 @@ def seed_roles_and_permissions(apps, schema_editor):
     # Define committee roles (codename, name, description, role_type, sort_order, auto_include_in_ba)
     COMMITTEE_ROLES = [
         ('CHAIR', 'Vorsitz',
-         'Vorsitzender des Gremiums', 'COMMITTEE', 1, True),  # auto_include_in_ba
+         'Vorsitzender des Gremiums', 'COMMITTEE', 1, True),
         ('VICE_CHAIR', 'Stellv. Vorsitz',
-         'Stellvertretender Vorsitzender', 'COMMITTEE', 2, True),  # auto_include_in_ba
+         'Stellvertretender Vorsitzender', 'COMMITTEE', 2, True),
         ('VICE_CHAIR2', '2ter Stellv. Vorsitz',
          '2ter Stellvertretender Vorsitzender', 'COMMITTEE', 3, False),
         ('CLERK', 'Schriftführung',
