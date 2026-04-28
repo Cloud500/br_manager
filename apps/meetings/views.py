@@ -76,8 +76,66 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
         
-        # TODO: Add agenda items count when agendas app is implemented
-        # context['agenda_items_count'] = self.object.agenda_items.count()
+        # Add agenda permission flags
+        if self.object.has_agenda:
+            from apps.committees.models import Membership
+            
+            user = self.request.user
+            committee = self.object.committee
+            
+            # Helper function to check permissions
+            def user_has_agenda_permission(permission_codename: str) -> bool:
+                """Check if user has agenda permission in committee."""
+                # Guard: Superuser/staff always have permission
+                if user.is_superuser or user.is_staff:
+                    return True
+                
+                # Standard permission check in this committee
+                memberships = Membership.objects.filter(
+                    user=user,
+                    committee=committee,
+                    is_active=True
+                ).select_related('role')
+                
+                for membership in memberships:
+                    if membership.role and membership.role.permissions.filter(
+                        codename=permission_codename
+                    ).exists():
+                        return True
+                
+                # Special rule for MAIN committee: check BA membership
+                if committee.committee_type == 'MAIN':
+                    ba = committee.subcommittees.filter(
+                        committee_type='COMMITTEE',
+                        is_active=True
+                    ).first()
+                    
+                    if ba:
+                        ba_memberships = Membership.objects.filter(
+                            user=user,
+                            committee=ba,
+                            is_active=True
+                        ).select_related('role')
+                        
+                        for ba_membership in ba_memberships:
+                            if ba_membership.role and ba_membership.role.permissions.filter(
+                                codename=permission_codename
+                            ).exists():
+                                return True
+                
+                return False
+            
+            # Add permission flags to context
+            context['user_can_add_item'] = user_has_agenda_permission('agenda.add_item_regular')
+            context['user_can_edit_item'] = user_has_agenda_permission('agenda.edit_item_regular')
+            context['user_can_delete_item'] = user_has_agenda_permission('agenda.delete_item_regular')
+            context['user_can_reorder_items'] = user_has_agenda_permission('agenda.reorder_items')
+        else:
+            # No agenda - set all permissions to False
+            context['user_can_add_item'] = False
+            context['user_can_edit_item'] = False
+            context['user_can_delete_item'] = False
+            context['user_can_reorder_items'] = False
         
         # TODO: Add attendance statistics when attendance app is implemented
         # context['attendees_count'] = self.object.attendance_records.filter(status='PRESENT').count()
