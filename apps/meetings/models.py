@@ -411,6 +411,28 @@ class Meeting(models.Model):
         """Meeting can be completed only when IN_PROGRESS."""
         return self.status == 'IN_PROGRESS'
     
+    @property
+    def has_agenda(self) -> bool:
+        """
+        Check if meeting has an associated agenda.
+        
+        Returns:
+            True if an Agenda object exists for this meeting
+        """
+        return hasattr(self, 'agenda')
+    
+    @property
+    def agenda_finalized(self) -> bool:
+        """
+        Check if the meeting's agenda is finalized (status = SENT).
+        
+        Returns:
+            True if agenda exists and is finalized, False otherwise
+        """
+        if not self.has_agenda:
+            return False
+        return self.agenda.is_finalized
+    
     def get_duration(self) -> Optional[timedelta]:
         """
         Calculate planned duration.
