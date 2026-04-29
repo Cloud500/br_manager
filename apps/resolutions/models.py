@@ -143,7 +143,13 @@ class Resolution(models.Model):
         verbose_name = 'Beschluss'
         verbose_name_plural = 'Beschlüsse'
         ordering = ['-created_at']
-        unique_together = [['committee', 'resolution_number']]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['committee', 'resolution_number'],
+                condition=~models.Q(resolution_number=''),
+                name='unique_resolution_number_per_committee',
+            ),
+        ]
         indexes = [
             models.Index(fields=['committee', 'status']),
             models.Index(fields=['status']),
