@@ -54,6 +54,15 @@ class Election(AgendaItem):
         default=STATUS_DRAFT,
         verbose_name='Status'
     )
+    parent_regular = models.ForeignKey(
+        'agendas.AgendaItemRegular',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='election_children',
+        verbose_name='Übergeordneter regulärer TOP',
+        help_text='Ermöglicht Wahlen als Unter-TOP regulärer Tagesordnungspunkte'
+    )
 
     class Meta:
         verbose_name = 'Wahl'
@@ -78,6 +87,12 @@ class Election(AgendaItem):
                 raise ValidationError({
                     'status': 'Eine Wahl kann nur mit mindestens einer kandidierenden Person veröffentlicht werden.'
                 })
+
+        if self.parent_id and self.parent_regular_id:
+            raise ValidationError('Eine Wahl kann nur einem übergeordneten TOP zugeordnet werden.')
+
+        if self.parent_regular_id and self.parent_regular.agenda_id != self.agenda_id:
+            raise ValidationError('Der übergeordnete TOP muss zur gleichen Tagesordnung gehören.')
 
     def save(self, *args, **kwargs) -> None:
         """Save election while preserving published elections as read-only."""
@@ -130,6 +145,7 @@ class Election(AgendaItem):
         fields = [
             'agenda_id',
             'parent_id',
+            'parent_regular_id',
             'title',
             'description',
             'sort_order',

@@ -3,7 +3,7 @@
 import uuid
 from typing import Any, Dict, List, Optional
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import FieldDoesNotExist, ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -111,7 +111,7 @@ class Agenda(models.Model):
     @property
     def top_level_items(self) -> List[models.Model]:
         """Return all agenda items without a parent."""
-        return [item for item in self.all_items if not item.parent_id]
+        return [item for item in self.all_items if get_parent_key(item) is None]
 
     def next_sort_order(self) -> float:
         """Return the next sort order across all concrete agenda item types."""
@@ -171,8 +171,8 @@ class Agenda(models.Model):
         for item in all_items:
             item.item_number = ""
         
-        # Build a map: item_id -> item for quick lookup
-        item_map = {(item.__class__, item.id): item for item in all_items}
+        # Build a map: (item_type, item_id) -> item for quick lookup
+        item_map = {get_item_key(item): item for item in all_items}
         
         # Counter dictionary: {parent_id: next_number}
         counters: Dict[Optional[Any], int] = {}
@@ -183,8 +183,7 @@ class Agenda(models.Model):
             if item.item_number:
                 return item.item_number
             
-            parent_id = item.parent_id
-            parent_key = (item.__class__, parent_id) if parent_id else None
+            parent_key = get_parent_key(item)
              
             # Initialize counter for this parent if not exists
             if parent_key not in counters:
@@ -193,12 +192,12 @@ class Agenda(models.Model):
                 counters[parent_key] += 1
             
             # Calculate item number
-            if parent_id is None:
+            if parent_key is None:
                 # Top-level item: "1", "2", "3", ...
                 item.item_number = str(counters[None])
             else:
                 # Ensure parent number is calculated first
-                parent = item_map.get((item.__class__, parent_id))
+                parent = item_map.get(parent_key)
                 if parent:
                     if not parent.item_number:
                         calculate_number(parent)
@@ -368,6 +367,20 @@ class AgendaItem(models.Model):
         }
         return type_names.get(self.item_type, self.item_type or 'Unbekannt')
 
+    def get_ordered_children(self) -> List[models.Model]:
+        """Return same-type and supported cross-type children in agenda order."""
+        children = list(self.children.all())
+        for item_model in get_concrete_agenda_item_models():
+            if item_model == self.__class__:
+                continue
+            try:
+                item_model._meta.get_field('parent_regular')
+            except FieldDoesNotExist:
+                continue
+            if self.__class__.__name__ == 'AgendaItemRegular':
+                children.extend(item_model.objects.filter(parent_regular=self))
+        return sorted(children, key=lambda item: (item.sort_order, item.created_at, str(item.pk)))
+
 
 class AgendaItemRegular(AgendaItem):
     """
@@ -400,6 +413,15 @@ class AgendaItemResolution(AgendaItem):
         related_name='agenda_items',
         verbose_name='Beschluss'
     )
+    parent_regular = models.ForeignKey(
+        AgendaItemRegular,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='resolution_children',
+        verbose_name='Übergeordneter regulärer TOP',
+        help_text='Ermöglicht Beschlüsse als Unter-TOP regulärer Tagesordnungspunkte'
+    )
     
     class Meta:
         verbose_name = 'Beschluss-TOP'
@@ -424,6 +446,12 @@ class AgendaItemResolution(AgendaItem):
             raise ValidationError({
                 'resolution': 'Beschluss muss ausgewählt werden'
             })
+
+        if self.parent_id and self.parent_regular_id:
+            raise ValidationError('Ein Beschluss-TOP kann nur einem übergeordneten TOP zugeordnet werden.')
+
+        if self.parent_regular_id and self.parent_regular.agenda_id != self.agenda_id:
+            raise ValidationError('Der übergeordnete TOP muss zur gleichen Tagesordnung gehören.')
         
         # Validate resolution is in PROPOSED status
         if self.resolution.status != 'PROPOSED':
@@ -467,3 +495,21 @@ def get_concrete_agenda_item_models() -> List[type[models.Model]]:
         item_models.append(Election)
 
     return item_models
+
+
+def get_item_key(item: models.Model) -> tuple[str, str]:
+    """Return the concrete item key used for cross-table agenda lookups."""
+    return (item.__class__.__name__, str(item.pk))
+
+
+def get_parent_key(item: models.Model) -> tuple[str, str] | None:
+    """Return the concrete parent key for same-type or supported cross-type parents."""
+    parent_regular_id = getattr(item, 'parent_regular_id', None)
+    if parent_regular_id:
+        return ('AgendaItemRegular', str(parent_regular_id))
+
+    parent_id = getattr(item, 'parent_id', None)
+    if parent_id:
+        return (item.__class__.__name__, str(parent_id))
+
+    return None

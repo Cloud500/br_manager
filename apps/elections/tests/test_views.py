@@ -6,11 +6,12 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.accounts.factories import UserFactory
-from apps.agendas.models import AgendaItemRegular
+from apps.agendas.models import AgendaItemRegular, AgendaItemResolution
 from apps.committees.factories import MainCommitteeFactory
 from apps.committees.models import Membership
 from apps.elections.models import Election, ElectionCandidate
 from apps.meetings.models import Meeting
+from apps.resolutions.models import Resolution
 from apps.roles.models import Permission, Role, RolePermission
 
 
@@ -132,6 +133,75 @@ class ElectionViewTests(TestCase):
         self.assertEqual(response.status_code, 400)
         election.refresh_from_db()
         self.assertEqual(election.sort_order, 2)
+
+    def test_reorder_allows_draft_election_below_regular_top(self):
+        """Draft elections can be nested below regular TOPs and get sub numbering."""
+        regular = AgendaItemRegular.objects.create(agenda=self.agenda, title='Bericht', sort_order=1)
+        election = Election.objects.create(agenda=self.agenda, title='Wahl', sort_order=2)
+        self.client.force_login(self.chair_user)
+
+        response = self.client.post(
+            reverse('agendas:reorder_items', kwargs={'agenda_id': self.agenda.pk}),
+            data=json.dumps({
+                'item_order': [
+                    {'id': str(regular.pk), 'type': 'AgendaItemRegular', 'parent_id': None},
+                    {
+                        'id': str(election.pk),
+                        'type': 'Election',
+                        'parent_id': str(regular.pk),
+                        'parent_type': 'AgendaItemRegular',
+                    },
+                ]
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        election.refresh_from_db()
+        self.assertEqual(election.parent_regular, regular)
+        self.assertEqual(election.parent_id, None)
+        self.assertEqual(election.item_number, '1.1')
+        self.assertEqual(response.json()['item_numbers'][str(election.pk)], '1.1')
+
+    def test_reorder_allows_resolution_below_regular_top(self):
+        """Resolution TOPs can be nested below regular TOPs and get sub numbering."""
+        regular = AgendaItemRegular.objects.create(agenda=self.agenda, title='Bericht', sort_order=1)
+        resolution = Resolution.objects.create(
+            committee=self.committee,
+            proposal='Anschaffung neuer Hardware',
+            status='PROPOSED',
+            created_by=self.chair_user,
+        )
+        resolution_item = AgendaItemResolution.objects.create(
+            agenda=self.agenda,
+            title='Beschluss Hardware',
+            resolution=resolution,
+            sort_order=2,
+        )
+        self.client.force_login(self.chair_user)
+
+        response = self.client.post(
+            reverse('agendas:reorder_items', kwargs={'agenda_id': self.agenda.pk}),
+            data=json.dumps({
+                'item_order': [
+                    {'id': str(regular.pk), 'type': 'AgendaItemRegular', 'parent_id': None},
+                    {
+                        'id': str(resolution_item.pk),
+                        'type': 'AgendaItemResolution',
+                        'parent_id': str(regular.pk),
+                        'parent_type': 'AgendaItemRegular',
+                    },
+                ]
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        resolution_item.refresh_from_db()
+        self.assertEqual(resolution_item.parent_regular, regular)
+        self.assertEqual(resolution_item.parent_id, None)
+        self.assertEqual(resolution_item.item_number, '1.1')
+        self.assertEqual(response.json()['item_numbers'][str(resolution_item.pk)], '1.1')
 
     def test_reorder_rejects_cycles(self):
         """AJAX reorder rejects self-parenting/cyclic TOP hierarchies."""

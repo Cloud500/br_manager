@@ -15,7 +15,14 @@ from django.views.generic import CreateView, DeleteView, UpdateView
 
 from .forms import AgendaItemRegularForm, AgendaItemResolutionForm
 from .mixins import AgendaPermissionMixin
-from .models import Agenda, AgendaItemRegular, AgendaItemResolution, get_concrete_agenda_item_models
+from .models import (
+    Agenda,
+    AgendaItemRegular,
+    AgendaItemResolution,
+    get_concrete_agenda_item_models,
+    get_item_key,
+    get_parent_key,
+)
 
 
 class AgendaItemCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView):
@@ -350,82 +357,111 @@ def reorder_items(request, agenda_id: UUID):
             'message': 'Ungültige JSON-Daten'
         }, status=400)
     
-    # Update sort_order and parent_id for each item, grouped by concrete model
+    # Update sort_order and parent references for each item, grouped by concrete model
     items_to_update = {}
     model_by_type = {
         item_model.__name__: item_model
         for item_model in get_concrete_agenda_item_models()
     }
-    existing_items = {
-        (item.__class__.__name__, str(item.id)): item
-        for item in agenda.all_items
-    }
+    existing_items = {get_item_key(item): item for item in agenda.all_items}
+    existing_items_by_id = {}
+    for item in agenda.all_items:
+        existing_items_by_id.setdefault(str(item.id), []).append(item)
     existing_positions = {
-        (item.__class__.__name__, str(item.id)): index
+        get_item_key(item): index
         for index, item in enumerate(agenda.all_items)
     }
-    requested_parents = {
-        item_data.get('type') or 'AgendaItemRegular': {}
-        for item_data in item_order
-    }
+
+    def resolve_parent_key(parent_id: str | None, parent_type: str | None = None) -> tuple[str, str] | None:
+        """Resolve a posted parent reference to a concrete agenda item key."""
+        if not parent_id:
+            return None
+        if parent_type:
+            parent_key = (parent_type, str(parent_id))
+            return parent_key if parent_key in existing_items else None
+
+        possible_parents = existing_items_by_id.get(str(parent_id), [])
+        if len(possible_parents) == 1:
+            return get_item_key(possible_parents[0])
+        return None
+
+    requested_parents = {}
     for item_data in item_order:
         item_type = item_data.get('type') or 'AgendaItemRegular'
         item_id = item_data.get('id')
         parent_id = item_data.get('parent_id')
-        requested_parents.setdefault(item_type, {})[str(item_id)] = str(parent_id) if parent_id else None
+        parent_type = item_data.get('parent_type')
+        item_key = (item_type, str(item_id))
+        requested_parents[item_key] = resolve_parent_key(parent_id, parent_type)
 
-    def has_cycle(item_type: str, item_id: str, parent_id: str | None) -> bool:
+    def has_cycle(item_key: tuple[str, str], parent_key: tuple[str, str] | None) -> bool:
         """Return whether requested parent assignment creates a cycle."""
-        seen = {item_id}
-        current_parent = parent_id
+        seen = {item_key}
+        current_parent = parent_key
         while current_parent:
             if current_parent in seen:
                 return True
             seen.add(current_parent)
-            current_parent = requested_parents.get(item_type, {}).get(current_parent)
+            current_parent = requested_parents.get(current_parent)
         return False
     
     for index, item_data in enumerate(item_order):
         item_id = item_data.get('id')
         parent_id = item_data.get('parent_id')
+        parent_type = item_data.get('parent_type')
         item_type = item_data.get('type') or 'AgendaItemRegular'
         item_model = model_by_type.get(item_type, AgendaItemRegular)
         item_key = (item_type, str(item_id))
         item = existing_items.get(item_key)
+        parent_key = resolve_parent_key(parent_id, parent_type)
 
         if item is None:
             continue
 
         if item_type == 'Election' and getattr(item, 'status', None) == 'PUBLISHED':
             original_index = existing_positions.get(item_key)
-            if original_index != index or str(item.parent_id or '') != str(parent_id or ''):
+            if original_index != index or get_parent_key(item) != parent_key:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Veröffentlichte Wahlen können nicht neu angeordnet werden.'
                 }, status=400)
 
         if parent_id:
-            parent_key = (item_type, str(parent_id))
-            if parent_key not in existing_items:
+            if parent_key is None or parent_key not in existing_items:
                 return JsonResponse({
                     'status': 'error',
-                    'message': 'Unterordnung zwischen unterschiedlichen TOP-Typen wird nicht unterstützt.'
+                    'message': 'Übergeordneter TOP wurde nicht gefunden.'
                 }, status=400)
-            if str(parent_id) == str(item_id) or has_cycle(item_type, str(item_id), str(parent_id)):
+            can_use_regular_parent = hasattr(item, 'parent_regular_id') and parent_key[0] == 'AgendaItemRegular'
+            if item_type != parent_key[0] and not can_use_regular_parent:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Diese Unterordnung zwischen unterschiedlichen TOP-Typen wird nicht unterstützt.'
+                }, status=400)
+            if item_key == parent_key or has_cycle(item_key, parent_key):
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Ungültige TOP-Hierarchie: zirkuläre Unterordnung ist nicht erlaubt.'
                 }, status=400)
-         
+          
         item.sort_order = float(index)
-        item.parent_id = parent_id if parent_id else None
+        if hasattr(item, 'parent_regular_id') and parent_key and parent_key[0] == 'AgendaItemRegular':
+            item.parent_id = None
+            item.parent_regular_id = parent_key[1]
+        else:
+            item.parent_id = parent_key[1] if parent_key else None
+            if hasattr(item, 'parent_regular_id'):
+                item.parent_regular_id = None
         items_to_update.setdefault(item_model, []).append(item)
      
     # Bulk update
     for item_model, model_items in items_to_update.items():
+        update_fields = ['sort_order', 'parent_id']
+        if any(hasattr(item, 'parent_regular_id') for item in model_items):
+            update_fields.append('parent_regular_id')
         item_model.objects.bulk_update(
             model_items,
-            fields=['sort_order', 'parent_id'],
+            fields=update_fields,
             batch_size=100
         )
     

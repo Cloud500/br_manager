@@ -63,9 +63,9 @@
     {% endif %}
     
     <!-- Nested Items -->
-    {% if item.children.exists %}
+    {% if item.get_ordered_children %}
         <ol>
-            {% for child in item.children.all %}
+            {% for child in item.get_ordered_children %}
                 {% include 'agendas/includes/agenda_item_readonly.html' with item=child can_edit=can_edit can_delete=can_delete can_view_election=can_view_election can_edit_election=can_edit_election can_delete_election=can_delete_election %}
             {% endfor %}
         </ol>

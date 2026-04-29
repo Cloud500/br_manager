@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const items = [];
         const rootList = document.getElementById('agenda-items-list');
         
-        function processItems(list, parentId = null) {
+        function processItems(list, parent = null) {
             const listItems = list.querySelectorAll(':scope > .agenda-item');
             
             listItems.forEach(item => {
@@ -98,13 +98,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 items.push({
                     id: itemId,
                     type: itemType,
-                    parent_id: parentId
+                    parent_id: parent ? parent.id : null,
+                    parent_type: parent ? parent.type : null
                 });
                 
                 // Check for nested items
                 const nestedList = item.querySelector(':scope > .agenda-items-sortable');
                 if (nestedList) {
-                    processItems(nestedList, itemId);
+                    processItems(nestedList, {id: itemId, type: itemType});
                 }
             });
         }

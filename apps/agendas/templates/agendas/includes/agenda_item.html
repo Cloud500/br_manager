@@ -80,7 +80,7 @@
     
     <!-- Nested Items Container (always present for drag & drop) -->
     <ul class="list-group mt-2 ms-4 agenda-items-sortable" style="min-height: 0;">
-        {% for child in item.children.all %}
+        {% for child in item.get_ordered_children %}
             {% include 'agendas/includes/agenda_item.html' with item=child can_edit=can_edit can_delete=can_delete can_reorder=can_reorder can_view_election=can_view_election can_edit_election=can_edit_election can_delete_election=can_delete_election %}
         {% endfor %}
     </ul>
