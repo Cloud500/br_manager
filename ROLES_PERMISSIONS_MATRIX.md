@@ -113,6 +113,32 @@ Verwendet als Basis für die Anpassung der Migrations-Dateien in `apps/*/migrati
 
 ---
 
+## APP: AGENDAS (Tagesordnungs-Verwaltung)
+
+| Permission                 | Codename                     | SYSTEM_ADMIN | USER | CHAIR | VICE_CHAIR | CLERK | MEMBER | SUBSTITUTE | EXTERNAL_MEMBER | GUEST |
+|----------------------------|------------------------------|--------------|------|-------|------------|-------|--------|------------|-----------------|-------|
+| Tagesordnung ansehen       | agenda.view                  | ✓            | ✗    | ✓     | ✓          | ✓     | ✓      | ✗          | ✗               | ✗     |
+| Normalen TOP hinzufügen    | agenda.add_item_regular      | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| Normalen TOP bearbeiten    | agenda.edit_item_regular     | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| Normalen TOP löschen       | agenda.delete_item_regular   | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| TOPs neu anordnen          | agenda.reorder_items         | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+
+---
+
+## APP: RESOLUTIONS (Beschluss-Verwaltung)
+
+| Permission                           | Codename                         | SYSTEM_ADMIN | USER | CHAIR | VICE_CHAIR | CLERK | MEMBER | SUBSTITUTE | EXTERNAL_MEMBER | GUEST |
+|--------------------------------------|----------------------------------|--------------|------|-------|------------|-------|--------|------------|-----------------|-------|
+| Beschluss erstellen                  | resolution.create                | ✓            | ✗    | ✓     | ✓          | ✓     | ✓      | ✗          | ✗               | ✗     |
+| Beschluss bearbeiten                 | resolution.edit                  | ✓            | ✗    | ✓     | ✓          | ✓     | ✓      | ✗          | ✗               | ✗     |
+| Beschluss während Sitzung bearbeiten | resolution.edit_during_meeting   | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| Beschluss löschen                    | resolution.delete                | ✓            | ✗    | ✓     | ✓          | ✓     | ✓      | ✗          | ✗               | ✗     |
+| Beschluss anzeigen                   | resolution.view                  | ✓            | ✗    | ✓     | ✓          | ✓     | ✓      | ✗          | ✗               | ✗     |
+| Beschluss vorschlagen                | resolution.propose               | ✓            | ✗    | ✓     | ✓          | ✓     | ✓      | ✗          | ✗               | ✗     |
+| Beschluss beschließen/ablehnen       | resolution.decide                | ✓            | ✗    | ✓     | ✓          | ✗     | ✗      | ✗          | ✗               | ✗     |
+
+---
+
 ## Hinweise zur Nutzung
 
 1. **SYSTEM_ADMIN** erhält automatisch ALLE Permissions (siehe Code in den Migrations)
