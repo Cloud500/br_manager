@@ -62,3 +62,23 @@ class ResolutionCreateViewTest(TestCase):
             Resolution.objects.filter(committee=self.committee).count(),
             2,
         )
+
+    def test_main_committee_without_resolution_flag_returns_form_error(self):
+        """Invalid main committee selection renders a form error instead of a 500."""
+        committee = MainCommitteeFactory.create(can_create_resolutions=False)
+        payload = {
+            'committee': str(committee.pk),
+            'proposal': 'Draft resolution',
+            'justification': '',
+            'propose_to_main_committee': '',
+        }
+
+        response = self.client.post(self.url, payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFormError(
+            response.context['form'],
+            'committee',
+            'Dieses Gremium darf keine Beschlüsse erstellen',
+        )
+        self.assertFalse(Resolution.objects.filter(committee=committee).exists())

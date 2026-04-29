@@ -2,10 +2,10 @@
 
 import uuid
 from datetime import date
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -175,9 +175,21 @@ class Resolution(models.Model):
             ValidationError: If validation fails
         """
         super().clean()
+
+        committee = None
+        if self.committee_id:
+            try:
+                committee = self.committee
+            except ObjectDoesNotExist:
+                # Field-level validation reports missing/invalid committee values.
+                return
+        else:
+            # ModelForm validation may exclude committee after a field error; do
+            # not turn that normal form error into RelatedObjectDoesNotExist.
+            return
         
         # Betriebsausschuss must always propose to main committee
-        if self.committee and self.committee.committee_type == 'COMMITTEE':
+        if committee.committee_type == 'COMMITTEE':
             if not self.propose_to_main_committee:
                 raise ValidationError({
                     'propose_to_main_committee': 
@@ -185,8 +197,8 @@ class Resolution(models.Model):
                 })
         
         # propose_to_main_committee only for committees with parent
-        if self.propose_to_main_committee and self.committee:
-            if not self.committee.parent:
+        if self.propose_to_main_committee:
+            if not committee.parent_id:
                 raise ValidationError({
                     'propose_to_main_committee': 
                     'Nur Beschlüsse von Ausschüssen können dem Hauptgremium vorgeschlagen werden'
