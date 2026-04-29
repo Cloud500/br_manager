@@ -198,6 +198,7 @@ class ResolutionCreateView(LoginRequiredMixin, CreateView):
             return self.form_invalid(form)
         
         resolution.save()
+        self.object = resolution
         
         messages.success(
             self.request,

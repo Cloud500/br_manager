@@ -1,6 +1,7 @@
 """Tests for resolutions app."""
 
 from django.test import TestCase
+from django.urls import reverse
 
 from apps.accounts.factories import UserFactory
 from apps.committees.factories import MainCommitteeFactory
@@ -32,3 +33,32 @@ class ResolutionModelTest(TestCase):
         second.save()
 
         self.assertEqual(Resolution.objects.filter(committee=committee).count(), 2)
+
+
+class ResolutionCreateViewTest(TestCase):
+    """Tests for resolution creation view."""
+
+    def setUp(self):
+        self.user = UserFactory.create(is_superuser=True, is_staff=True)
+        self.client.force_login(self.user)
+        self.committee = MainCommitteeFactory.create(can_create_resolutions=True)
+        self.url = reverse('resolutions:resolution_create')
+
+    def test_superuser_can_create_multiple_draft_resolutions(self):
+        """A superuser can create multiple draft resolutions for one committee."""
+        payload = {
+            'committee': str(self.committee.pk),
+            'proposal': 'Draft resolution',
+            'justification': '',
+            'propose_to_main_committee': '',
+        }
+
+        first_response = self.client.post(self.url, payload)
+        second_response = self.client.post(self.url, payload)
+
+        self.assertEqual(first_response.status_code, 302)
+        self.assertEqual(second_response.status_code, 302)
+        self.assertEqual(
+            Resolution.objects.filter(committee=self.committee).count(),
+            2,
+        )
