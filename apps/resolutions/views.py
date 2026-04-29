@@ -3,9 +3,8 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -241,7 +240,7 @@ class ResolutionUpdateView(LoginRequiredMixin, ResolutionPermissionMixin, Update
         """Update resolution."""
         messages.success(
             self.request,
-            f'Beschluss wurde aktualisiert'
+            'Beschluss wurde aktualisiert'
         )
         return super().form_valid(form)
     
