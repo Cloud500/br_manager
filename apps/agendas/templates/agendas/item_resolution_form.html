@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Beschluss hinzufügen - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'meetings:meeting_list' %}">Sitzungen</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'meetings:meeting_detail' agenda.meeting.pk %}">{{ agenda.meeting.title }}</a></li>
+                    <li class="breadcrumb-item active">Beschluss hinzufügen</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-file-earmark-text"></i> Beschluss zur Tagesordnung hinzufügen
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% url 'meetings:meeting_detail' agenda.meeting.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-plus-circle"></i> Hinzufügen
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Card -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-question-circle"></i> Hilfe</h6>
+                </div>
+                <div class="card-body">
+                    <h6>Beschluss auswählen</h6>
+                    <p class="small">
+                        Nur Beschlüsse im Status "Vorgeschlagen" können zur Tagesordnung hinzugefügt werden.
+                    </p>
+
+                    <h6>Titel und Beschreibung</h6>
+                    <p class="small">
+                        Sie können einen eigenen Titel und eine Beschreibung für den Tagesordnungspunkt vergeben.
+                        Wenn Sie keinen Titel angeben, wird automatisch "Beschluss: [Beschlusstext]" verwendet.
+                    </p>
+
+                    <h6>Hierarchische Struktur</h6>
+                    <p class="small">
+                        Optional können Sie einen übergeordneten TOP auswählen, um eine hierarchische
+                        Tagesordnungsstruktur zu erstellen (z.B. TOP 1.1, 1.2, etc.).
+                    </p>
+
+                    <div class="alert alert-info small mt-3">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Hinweis:</strong> Nach dem Hinzufügen wird die Tagesordnungsnummerierung
+                        automatisch neu berechnet.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

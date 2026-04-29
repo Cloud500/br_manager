@@ -9,6 +9,7 @@ app_name = 'agendas'
 urlpatterns = [
     # Agenda item CRUD
     path('<uuid:agenda_id>/items/add/', views.AgendaItemCreateView.as_view(), name='item_create'),
+    path('<uuid:agenda_id>/items/add-resolution/', views.AgendaItemResolutionCreateView.as_view(), name='item_resolution_create'),
     path('items/<uuid:pk>/edit/', views.AgendaItemUpdateView.as_view(), name='item_update'),
     path('items/<uuid:pk>/delete/', views.AgendaItemDeleteView.as_view(), name='item_delete'),
     

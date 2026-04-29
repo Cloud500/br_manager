@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Agenda, AgendaItemRegular
+from .models import Agenda, AgendaItemRegular, AgendaItemResolution
 
 
 class AgendaItemInline(admin.TabularInline):
@@ -81,3 +81,38 @@ class AgendaItemRegularAdmin(admin.ModelAdmin):
             'classes': ['collapse']
         }),
     ]
+
+
+@admin.register(AgendaItemResolution)
+class AgendaItemResolutionAdmin(admin.ModelAdmin):
+    """Admin interface for AgendaItemResolution model."""
+    
+    list_display = ['item_number', 'title', 'resolution_display', 'agenda', 'sort_order', 'created_at']
+    list_filter = ['created_at', 'agenda__meeting__committee', 'resolution__status']
+    search_fields = ['title', 'description', 'resolution__proposal', 'agenda__meeting__title']
+    readonly_fields = ['id', 'item_number', 'item_type', 'created_at', 'updated_at']
+    ordering = ['agenda', 'sort_order']
+    
+    fieldsets = [
+        ('Tagesordnung', {
+            'fields': ['agenda', 'parent']
+        }),
+        ('Beschluss', {
+            'fields': ['resolution']
+        }),
+        ('Inhalt', {
+            'fields': ['title', 'description']
+        }),
+        ('Sortierung', {
+            'fields': ['sort_order']
+        }),
+        ('System-Informationen', {
+            'fields': ['id', 'item_number', 'item_type', 'created_at', 'updated_at'],
+            'classes': ['collapse']
+        }),
+    ]
+    
+    def resolution_display(self, obj):
+        """Display resolution with status."""
+        return f"{obj.resolution.proposal[:50]}... ({obj.resolution.get_status_display()})"
+    resolution_display.short_description = 'Beschluss'

@@ -354,4 +354,78 @@ class AgendaItemRegular(AgendaItem):
     class Meta:
         verbose_name = 'Normaler TOP'
         verbose_name_plural = 'Normale TOPs'
+
+
+class AgendaItemResolution(AgendaItem):
+    """
+    Resolution agenda item.
+    
+    Links a resolution to an agenda. Only resolutions with status PROPOSED
+    can be added to an agenda.
+    
+    Attributes:
+        resolution: Associated resolution (ForeignKey)
+    """
+    
+    # Resolution relationship
+    resolution = models.ForeignKey(
+        'resolutions.Resolution',
+        on_delete=models.CASCADE,
+        related_name='agenda_items',
+        verbose_name='Beschluss'
+    )
+    
+    class Meta:
+        verbose_name = 'Beschluss-TOP'
+        verbose_name_plural = 'Beschluss-TOPs'
+    
+    def clean(self) -> None:
+        """
+        Validate resolution agenda item.
+        
+        Checks:
+        - Base agenda item validation (is_editable)
+        - Resolution must be in PROPOSED status
+        - Resolution committee must match agenda's meeting committee
+        
+        Raises:
+            ValidationError: If validation fails
+        """
+        super().clean()
+        
+        # Validate resolution exists
+        if not hasattr(self, 'resolution') or not self.resolution:
+            raise ValidationError({
+                'resolution': 'Beschluss muss ausgewählt werden'
+            })
+        
+        # Validate resolution is in PROPOSED status
+        if self.resolution.status != 'PROPOSED':
+            raise ValidationError({
+                'resolution': f'Nur Beschlüsse im Status "Vorgeschlagen" können zur Tagesordnung hinzugefügt werden. '
+                             f'Aktueller Status: {self.resolution.get_status_display()}'
+            })
+        
+        # Validate committee match
+        if hasattr(self, 'agenda') and self.agenda_id:
+            meeting_committee = self.agenda.meeting.committee
+            resolution_committee = self.resolution.committee
+            
+            # Resolution committee must match OR resolution must be proposed to this committee
+            valid = False
+            
+            # Direct match
+            if resolution_committee == meeting_committee:
+                valid = True
+            
+            # Resolution from subcommittee proposed to this committee
+            if self.resolution.propose_to_main_committee:
+                if resolution_committee.parent == meeting_committee:
+                    valid = True
+            
+            if not valid:
+                raise ValidationError({
+                    'resolution': f'Beschluss von "{resolution_committee.name}" kann nicht zur Tagesordnung '
+                                 f'von "{meeting_committee.name}" hinzugefügt werden'
+                })
         ordering = ['sort_order', 'item_number']

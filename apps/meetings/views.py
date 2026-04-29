@@ -127,12 +127,14 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
             
             # Add permission flags to context
             context['user_can_add_item'] = user_has_agenda_permission('agenda.add_item_regular')
+            context['user_can_add_resolution'] = user_has_agenda_permission('agenda.add_item_resolution')
             context['user_can_edit_item'] = user_has_agenda_permission('agenda.edit_item_regular')
             context['user_can_delete_item'] = user_has_agenda_permission('agenda.delete_item_regular')
             context['user_can_reorder_items'] = user_has_agenda_permission('agenda.reorder_items')
         else:
             # No agenda - set all permissions to False
             context['user_can_add_item'] = False
+            context['user_can_add_resolution'] = False
             context['user_can_edit_item'] = False
             context['user_can_delete_item'] = False
             context['user_can_reorder_items'] = False

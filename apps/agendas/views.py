@@ -14,9 +14,9 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, UpdateView
 
-from .forms import AgendaItemRegularForm
+from .forms import AgendaItemRegularForm, AgendaItemResolutionForm
 from .mixins import AgendaPermissionMixin
-from .models import Agenda, AgendaItemRegular
+from .models import Agenda, AgendaItemRegular, AgendaItemResolution
 
 
 class AgendaItemCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView):
@@ -83,6 +83,79 @@ class AgendaItemCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView
         messages.success(
             self.request,
             f'Tagesordnungspunkt "{form.instance.title}" wurde erstellt.'
+        )
+        
+        return response
+    
+    def get_success_url(self) -> str:
+        """Redirect to meeting detail page."""
+        return reverse('meetings:meeting_detail', kwargs={'pk': self.object.agenda.meeting.pk})
+
+
+class AgendaItemResolutionCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView):
+    """
+    Create new resolution agenda item.
+    
+    Requires 'agenda.add_item_resolution' permission.
+    """
+    
+    model = AgendaItemResolution
+    form_class = AgendaItemResolutionForm
+    template_name = 'agendas/item_resolution_form.html'
+    required_permission = 'agenda.add_item_resolution'
+    
+    def get_agenda(self) -> Agenda:
+        """Get agenda from URL parameter."""
+        agenda_id = self.request.GET.get('agenda') or self.kwargs.get('agenda_id')
+        return get_object_or_404(Agenda, pk=agenda_id)
+    
+    def get_form_kwargs(self) -> Dict[str, Any]:
+        """Add agenda to form kwargs."""
+        kwargs = super().get_form_kwargs()
+        kwargs['agenda'] = self.get_agenda()
+        return kwargs
+    
+    def get_context_data(self, **kwargs) -> Dict[str, Any]:
+        """Add agenda to context."""
+        context = super().get_context_data(**kwargs)
+        context['agenda'] = self.get_agenda()
+        context['is_create'] = True
+        return context
+    
+    def form_valid(self, form):
+        """
+        Handle valid form submission.
+        
+        Calculates sort_order, saves item, and triggers item number recalculation.
+        """
+        agenda = self.get_agenda()
+        
+        # Check if agenda is editable
+        if not agenda.is_editable:
+            messages.error(
+                self.request,
+                f'Tagesordnung kann nicht bearbeitet werden. '
+                f'Sitzungsstatus: {agenda.meeting.get_status_display()}'
+            )
+            return redirect('meetings:meeting_detail', pk=agenda.meeting.pk)
+        
+        # Calculate sort_order (last position + 1.0)
+        last_item = AgendaItemRegular.objects.filter(
+            agenda=agenda
+        ).order_by('-sort_order').first()
+        
+        if last_item:
+            form.instance.sort_order = last_item.sort_order + 1.0
+        else:
+            form.instance.sort_order = 1.0
+        
+        # Save item (agenda is already set by form.save())
+        # This will trigger recalculate_item_numbers via model save()
+        response = super().form_valid(form)
+        
+        messages.success(
+            self.request,
+            f'Beschluss "{form.instance.resolution.proposal[:50]}..." wurde zur Tagesordnung hinzugefügt.'
         )
         
         return response
