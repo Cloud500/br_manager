@@ -2,11 +2,14 @@
 
 import json
 import random
+import re
+import unicodedata
 import time
 from datetime import datetime
 from pathlib import Path
 
 import pyotp
+from faker import Faker as FakerGenerator
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -71,6 +74,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         """Execute the command."""
+        self.fake = FakerGenerator("de_DE")
+        self._used_emails = set()
+
         self.stdout.write(self.style.WARNING("\n" + "=" * 60))
         self.stdout.write(self.style.WARNING("  SEEDING TEST DATA"))
         self.stdout.write(self.style.WARNING("=" * 60 + "\n"))
@@ -276,7 +282,8 @@ class Command(BaseCommand):
         """Create regular test users."""
         users = []
         for i in range(count):
-            user = UserFactory.create()
+            gender = 'M' if i % 2 == 0 else 'F'
+            user = UserFactory.create(**self._build_user_identity(gender))
             UserProfileFactory.create(user=user)
             self._create_recovery_codes(user)
 
@@ -298,7 +305,7 @@ class Command(BaseCommand):
         
         # Create male users
         for i in range(users_cfg["male_count"]):
-            user = UserFactory.create(gender='M')
+            user = UserFactory.create(**self._build_user_identity('M'))
             UserProfileFactory.create(user=user)
             self._create_recovery_codes(user)
             categorized_users['male'].append(user)
@@ -308,7 +315,7 @@ class Command(BaseCommand):
         
         # Create female users
         for i in range(users_cfg["female_count"]):
-            user = UserFactory.create(gender='F')
+            user = UserFactory.create(**self._build_user_identity('F'))
             UserProfileFactory.create(user=user)
             self._create_recovery_codes(user)
             categorized_users['female'].append(user)
@@ -316,9 +323,10 @@ class Command(BaseCommand):
                 self.style.SUCCESS(f"[OK] Female user {i+1}/{users_cfg['female_count']} created: {user.email}")
             )
         
-        # Create guest users (gender random)
+        # Create guest users with gender-matching names.
         for i in range(users_cfg["guest_count"]):
-            user = UserFactory.create()
+            gender = 'M' if i % 2 == 0 else 'F'
+            user = UserFactory.create(**self._build_user_identity(gender))
             UserProfileFactory.create(user=user)
             self._create_recovery_codes(user)
             categorized_users['guest'].append(user)
@@ -337,6 +345,57 @@ class Command(BaseCommand):
         all_users._categorized = categorized_users
         
         return all_users
+
+    def _build_user_identity(self, gender):
+        """Build a Faker-based user identity matching the given gender."""
+        first_name = self._build_first_name(gender)
+        last_name = self.fake.last_name()
+        email = self._build_email(first_name, last_name)
+
+        return {
+            'email': email,
+            'first_name': first_name,
+            'last_name': last_name,
+            'gender': gender,
+        }
+
+    def _build_first_name(self, gender):
+        """Generate a first name that matches the selected gender."""
+        if gender == 'M':
+            return self.fake.first_name_male()
+        if gender == 'F':
+            return self.fake.first_name_female()
+
+        return self.fake.first_name()
+
+    def _build_email(self, first_name, last_name):
+        """Build a unique example.org email address from first and last name."""
+        local_part = f"{self._email_part(first_name)}.{self._email_part(last_name)}"
+        candidate = f"{local_part}@example.org"
+        suffix = 2
+
+        while candidate in self._used_emails or User.objects.filter(email=candidate).exists():
+            candidate = f"{local_part}.{suffix}@example.org"
+            suffix += 1
+
+        self._used_emails.add(candidate)
+        return candidate
+
+    def _email_part(self, value):
+        """Normalize a name component for email addresses."""
+        normalized = unicodedata.normalize("NFKC", value).strip().lower()
+        normalized = normalized.translate(
+            str.maketrans(
+                {
+                    "ä": "ae",
+                    "ö": "oe",
+                    "ü": "ue",
+                    "ß": "ss",
+                }
+            )
+        )
+        normalized = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
+        return normalized or "user"
 
     def _create_recovery_codes(self, user, count=10):
         """Create recovery codes for user."""
@@ -974,7 +1033,7 @@ Employee:   ADMIN-001
    Employee:   {profile.employee_id}
 """
         
-        content += f"""
+        content += """
 ================================================================================
   NOTES
 ================================================================================
