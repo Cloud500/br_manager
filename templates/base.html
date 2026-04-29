@@ -39,6 +39,13 @@
                             </a>
                         </li>
                         
+                        <!-- Beschlüsse Link -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'resolutions:resolution_list' %}">
+                                <i class="bi bi-file-earmark-check"></i> Beschlüsse
+                            </a>
+                        </li>
+                        
                         <!-- Verwaltung Dropdown (nur für Admins) -->
                         {% if user.is_superuser or perms.system.manage_users or perms.role.manage_roles %}
                         <li class="nav-item dropdown">

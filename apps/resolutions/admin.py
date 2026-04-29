@@ -1,0 +1,40 @@
+"""Admin configuration for resolutions app."""
+
+from django.contrib import admin
+
+from .models import Resolution
+
+
+@admin.register(Resolution)
+class ResolutionAdmin(admin.ModelAdmin):
+    """Admin interface for Resolution model."""
+    
+    list_display = [
+        'resolution_number', 'proposal_short', 'committee',
+        'status', 'created_by', 'created_at'
+    ]
+    list_filter = ['status', 'committee', 'propose_to_main_committee', 'created_at']
+    search_fields = ['proposal', 'justification', 'resolution_number']
+    readonly_fields = ['resolution_number', 'created_at', 'updated_at', 'decided_at']
+    
+    fieldsets = (
+        ('Grunddaten', {
+            'fields': ('committee', 'proposal', 'justification', 'propose_to_main_committee')
+        }),
+        ('Status', {
+            'fields': ('status', 'resolution_number', 'decided_at')
+        }),
+        ('Abstimmung', {
+            'fields': ('is_quorate', 'yes_votes', 'no_votes', 'abstentions'),
+            'classes': ('collapse',)
+        }),
+        ('Metadaten', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def proposal_short(self, obj):
+        """Return shortened proposal text."""
+        return obj.proposal[:75] + '...' if len(obj.proposal) > 75 else obj.proposal
+    proposal_short.short_description = 'Beschlussvorschlag'

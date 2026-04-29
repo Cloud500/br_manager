@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if object %}Beschluss bearbeiten{% else %}Neuer Beschluss{% endif %} - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'resolutions:resolution_list' %}">Beschlüsse</a></li>
+                    {% if object %}
+                    <li class="breadcrumb-item"><a href="{% url 'resolutions:resolution_detail' object.pk %}">{{ object.resolution_number|default:"Entwurf" }}</a></li>
+                    <li class="breadcrumb-item active">Bearbeiten</li>
+                    {% else %}
+                    <li class="breadcrumb-item active">Neu</li>
+                    {% endif %}
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-file-earmark-text"></i>
+                        {% if object %}
+                            Beschluss bearbeiten
+                        {% else %}
+                            Neuer Beschluss
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{% if object %}{% url 'resolutions:resolution_detail' object.pk %}{% else %}{% url 'resolutions:resolution_list' %}{% endif %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i>
+                                {% if object %}Speichern{% else %}Erstellen{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Card -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-question-circle"></i> Hilfe</h6>
+                </div>
+                <div class="card-body">
+                    <h6>Beschlussvorschlag</h6>
+                    <p class="small">Der zur Abstimmung zu stellende Beschlusstext. Formulieren Sie präzise und eindeutig.</p>
+
+                    <h6>Begründung</h6>
+                    <p class="small">Erläuterung und Hintergrund für den Beschlussvorschlag.</p>
+
+                    <h6>Für Hauptgremium vorschlagen</h6>
+                    <p class="small">
+                        Wenn aktiviert, kann dieser Beschluss in die Tagesordnung des Hauptgremiums aufgenommen werden.
+                        <br><br>
+                        <strong>Rechtliche Grundlagen:</strong>
+                    </p>
+                    <ul class="small">
+                        <li><strong>§ 27 BetrVG:</strong> Betriebsausschuss erstellt Beschlussvorschläge für den Betriebsrat</li>
+                        <li><strong>§ 28 BetrVG:</strong> Ausschüsse können Beschlüsse dem Betriebsrat vorschlagen</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

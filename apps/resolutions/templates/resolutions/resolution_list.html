@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+
+{% block title %}Beschlüsse - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="bi bi-file-earmark-text"></i> Beschlüsse
+                </h1>
+                <a href="{% url 'resolutions:resolution_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Neuer Beschluss
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        <i class="bi bi-funnel"></i> Filter
+                    </h5>
+                    <form method="get" action="{% url 'resolutions:resolution_list' %}">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="committee" class="form-label">Gremium</label>
+                                <select name="committee" id="committee" class="form-select">
+                                    <option value="">Alle Gremien</option>
+                                    {% for committee in committees %}
+                                    <option value="{{ committee.id }}" {% if selected_committee == committee.id|stringformat:"s" %}selected{% endif %}>
+                                        {{ committee.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="status" class="form-label">Status</label>
+                                <select name="status" id="status" class="form-select">
+                                    <option value="">Alle Status</option>
+                                    {% for value, label in status_choices %}
+                                    <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>
+                                        {{ label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-1 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resolutions List -->
+    <div class="row">
+        <div class="col-12">
+            {% if resolutions %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Beschlussnummer</th>
+                            <th>Beschlussvorschlag</th>
+                            <th>Gremium</th>
+                            <th>Status</th>
+                            <th>Erstellt am</th>
+                            <th>Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for resolution in resolutions %}
+                        <tr>
+                            <td>
+                                {% if resolution.resolution_number %}
+                                    <strong>{{ resolution.resolution_number }}</strong>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ resolution.proposal|truncatewords:15 }}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">{{ resolution.committee.name }}</span>
+                            </td>
+                            <td>
+                                {% if resolution.status == 'DRAFT' %}
+                                    <span class="badge bg-secondary">{{ resolution.get_status_display }}</span>
+                                {% elif resolution.status == 'PROPOSED' %}
+                                    <span class="badge bg-info">{{ resolution.get_status_display }}</span>
+                                {% elif resolution.status == 'APPROVED' %}
+                                    <span class="badge bg-success">{{ resolution.get_status_display }}</span>
+                                {% elif resolution.status == 'REJECTED' %}
+                                    <span class="badge bg-danger">{{ resolution.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ resolution.created_at|date:"d.m.Y H:i" }}</td>
+                            <td>
+                                <a href="{% url 'resolutions:resolution_detail' resolution.pk %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> Anzeigen
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+            <nav aria-label="Pagination">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% if selected_committee %}&committee={{ selected_committee }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">
+                            <i class="bi bi-chevron-double-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_committee %}&committee={{ selected_committee }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    <li class="page-item active">
+                        <span class="page-link">
+                            Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}
+                        </span>
+                    </li>
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_committee %}&committee={{ selected_committee }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_committee %}&committee={{ selected_committee }}{% endif %}{% if selected_status %}&status={{ selected_status }}{% endif %}">
+                            <i class="bi bi-chevron-double-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Keine Beschlüsse gefunden.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

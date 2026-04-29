@@ -229,6 +229,31 @@
                 </div>
             </div>
 
+            {% if committee.can_create_resolutions or committee.parent %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="bi bi-file-earmark-check"></i> Beschlüsse
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if committee.can_create_resolutions %}
+                        <p class="small text-muted mb-2">Dieses Gremium kann Beschlüsse für sich selbst erstellen.</p>
+                    {% elif committee.parent %}
+                        <p class="small text-muted mb-2">Dieses Gremium kann Beschlussvorschläge für {{ committee.parent.name }} erstellen.</p>
+                    {% endif %}
+                    <a href="{% url 'resolutions:resolution_list' %}?committee={{ committee.pk }}" class="btn btn-sm btn-outline-primary w-100 mb-2">
+                        <i class="bi bi-list"></i> Beschlüsse anzeigen
+                    </a>
+                    {% if user|has_committee_permission:"resolution.create" %}
+                    <a href="{% url 'resolutions:resolution_create' %}?committee={{ committee.pk }}" class="btn btn-sm btn-primary w-100">
+                        <i class="bi bi-plus-circle"></i> Neuer Beschluss
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             {% if committee.subcommittees.all %}
             <div class="card">
                 <div class="card-header">
