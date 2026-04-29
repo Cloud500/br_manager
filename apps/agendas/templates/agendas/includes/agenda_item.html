@@ -1,6 +1,6 @@
 {% load agenda_tags %}
 <!-- Single Agenda Item -->
-<li class="list-group-item agenda-item" data-item-id="{{ item.pk }}">
+<li class="list-group-item agenda-item" data-item-id="{{ item.pk }}" data-item-type="{{ item.item_type }}">
     <div class="d-flex align-items-start">
         <!-- Drag Handle (only if can_reorder) -->
         {% if can_reorder %}
@@ -18,6 +18,16 @@
         <div class="flex-grow-1">
             <div class="item-title">
                 <strong>{{ item.title }}</strong>
+                {% if item.item_type == 'Election' %}
+                    <span class="badge bg-info ms-2">Wahl</span>
+                    {% if item.status == 'PUBLISHED' %}
+                        <span class="badge bg-success ms-1">Veröffentlicht</span>
+                    {% else %}
+                        <span class="badge bg-secondary ms-1">Entwurf</span>
+                    {% endif %}
+                {% elif item.item_type == 'AgendaItemResolution' %}
+                    <span class="badge bg-success ms-2">Beschluss</span>
+                {% endif %}
             </div>
             {% if item.description %}
                 <div class="item-description text-muted small mt-1">
@@ -29,19 +39,40 @@
         <!-- Actions (only if editable) -->
         <div class="ms-2">
             <div class="btn-group btn-group-sm" role="group">
-                {% if can_edit %}
-                    <a href="{% url 'agendas:item_update' item.pk %}" 
-                       class="btn btn-outline-primary" 
-                       title="Bearbeiten">
-                        <i class="bi bi-pencil"></i>
+                {% if item.item_type == 'Election' and can_view_election %}
+                    <a href="{% url 'elections:election_detail' item.pk %}" class="btn btn-outline-secondary" title="Ansehen">
+                        <i class="bi bi-eye"></i>
                     </a>
                 {% endif %}
+                {% if can_edit %}
+                    {% if item.item_type == 'Election' %}
+                        {% if can_edit_election and item.is_editable %}
+                            <a href="{% url 'elections:election_update' item.pk %}" class="btn btn-outline-primary" title="Bearbeiten">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        <a href="{% url 'agendas:item_update' item.pk %}" 
+                           class="btn btn-outline-primary" 
+                           title="Bearbeiten">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                    {% endif %}
+                {% endif %}
                 {% if can_delete %}
-                    <a href="{% url 'agendas:item_delete' item.pk %}" 
-                       class="btn btn-outline-danger" 
-                       title="Löschen">
-                        <i class="bi bi-trash"></i>
-                    </a>
+                    {% if item.item_type == 'Election' %}
+                        {% if can_delete_election and item.is_deletable %}
+                            <a href="{% url 'elections:election_delete' item.pk %}" class="btn btn-outline-danger" title="Löschen">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        <a href="{% url 'agendas:item_delete' item.pk %}" 
+                           class="btn btn-outline-danger" 
+                           title="Löschen">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    {% endif %}
                 {% endif %}
             </div>
         </div>
@@ -50,7 +81,7 @@
     <!-- Nested Items Container (always present for drag & drop) -->
     <ul class="list-group mt-2 ms-4 agenda-items-sortable" style="min-height: 0;">
         {% for child in item.children.all %}
-            {% include 'agendas/includes/agenda_item.html' with item=child can_edit=can_edit can_delete=can_delete can_reorder=can_reorder %}
+            {% include 'agendas/includes/agenda_item.html' with item=child can_edit=can_edit can_delete=can_delete can_reorder=can_reorder can_view_election=can_view_election can_edit_election=can_edit_election can_delete_election=can_delete_election %}
         {% endfor %}
     </ul>
 </li>

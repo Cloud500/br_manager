@@ -125,6 +125,17 @@ Verwendet als Basis für die Anpassung der Migrations-Dateien in `apps/*/migrati
 
 ---
 
+## APP: ELECTIONS (Wahl-Verwaltung)
+
+| Permission         | Codename        | SYSTEM_ADMIN | USER | CHAIR | VICE_CHAIR | CLERK | MEMBER | SUBSTITUTE | EXTERNAL_MEMBER | GUEST |
+|--------------------|-----------------|--------------|------|-------|------------|-------|--------|------------|-----------------|-------|
+| Wahl erstellen     | election.create | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| Wahl anzeigen      | election.view   | ✓            | ✗    | ✓     | ✓          | ✓     | ✓      | ✗          | ✗               | ✗     |
+| Wahl bearbeiten    | election.edit   | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| Wahl löschen       | election.delete | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+
+---
+
 ## APP: RESOLUTIONS (Beschluss-Verwaltung)
 
 | Permission                           | Codename                         | SYSTEM_ADMIN | USER | CHAIR | VICE_CHAIR | CLERK | MEMBER | SUBSTITUTE | EXTERNAL_MEMBER | GUEST |

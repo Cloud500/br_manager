@@ -128,13 +128,26 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
             # Add permission flags to context
             context['user_can_add_item'] = user_has_agenda_permission('agenda.add_item_regular')
             context['user_can_add_resolution'] = user_has_agenda_permission('agenda.add_item_resolution')
+            context['user_can_add_election'] = user_has_agenda_permission('election.create')
+            context['user_can_view_election'] = user_has_agenda_permission('election.view')
+            context['user_can_edit_election'] = user_has_agenda_permission('election.edit')
+            context['user_can_delete_election'] = user_has_agenda_permission('election.delete')
             context['user_can_edit_item'] = user_has_agenda_permission('agenda.edit_item_regular')
             context['user_can_delete_item'] = user_has_agenda_permission('agenda.delete_item_regular')
             context['user_can_reorder_items'] = user_has_agenda_permission('agenda.reorder_items')
+            context['agenda_items'] = [
+                item for item in self.object.agenda.top_level_items
+                if item.item_type != 'Election' or context['user_can_view_election']
+            ]
         else:
             # No agenda - set all permissions to False
+            context['agenda_items'] = []
             context['user_can_add_item'] = False
             context['user_can_add_resolution'] = False
+            context['user_can_add_election'] = False
+            context['user_can_view_election'] = False
+            context['user_can_edit_election'] = False
+            context['user_can_delete_election'] = False
             context['user_can_edit_item'] = False
             context['user_can_delete_item'] = False
             context['user_can_reorder_items'] = False

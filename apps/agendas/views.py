@@ -7,7 +7,6 @@ from uuid import UUID
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -16,7 +15,7 @@ from django.views.generic import CreateView, DeleteView, UpdateView
 
 from .forms import AgendaItemRegularForm, AgendaItemResolutionForm
 from .mixins import AgendaPermissionMixin
-from .models import Agenda, AgendaItemRegular, AgendaItemResolution
+from .models import Agenda, AgendaItemRegular, AgendaItemResolution, get_concrete_agenda_item_models
 
 
 class AgendaItemCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView):
@@ -66,15 +65,7 @@ class AgendaItemCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView
             )
             return redirect('meetings:meeting_detail', pk=agenda.meeting.pk)
         
-        # Calculate sort_order (last position + 1.0)
-        last_item = AgendaItemRegular.objects.filter(
-            agenda=agenda
-        ).order_by('-sort_order').first()
-        
-        if last_item:
-            form.instance.sort_order = last_item.sort_order + 1.0
-        else:
-            form.instance.sort_order = 1.0
+        form.instance.sort_order = agenda.next_sort_order()
         
         # Save item (agenda is already set by form.save())
         # This will trigger recalculate_item_numbers via model save()
@@ -139,15 +130,7 @@ class AgendaItemResolutionCreateView(LoginRequiredMixin, AgendaPermissionMixin, 
             )
             return redirect('meetings:meeting_detail', pk=agenda.meeting.pk)
         
-        # Calculate sort_order (last position + 1.0)
-        last_item = AgendaItemRegular.objects.filter(
-            agenda=agenda
-        ).order_by('-sort_order').first()
-        
-        if last_item:
-            form.instance.sort_order = last_item.sort_order + 1.0
-        else:
-            form.instance.sort_order = 1.0
+        form.instance.sort_order = agenda.next_sort_order()
         
         # Save item (agenda is already set by form.save())
         # This will trigger recalculate_item_numbers via model save()
@@ -298,7 +281,6 @@ def reorder_items(request, agenda_id: UUID):
     agenda = get_object_or_404(Agenda, pk=agenda_id)
     
     # Check permission
-    from .mixins import AgendaPermissionMixin
     from apps.committees.models import Membership
     
     user = request.user
@@ -368,25 +350,81 @@ def reorder_items(request, agenda_id: UUID):
             'message': 'Ungültige JSON-Daten'
         }, status=400)
     
-    # Update sort_order and parent_id for each item
-    items_to_update = []
+    # Update sort_order and parent_id for each item, grouped by concrete model
+    items_to_update = {}
+    model_by_type = {
+        item_model.__name__: item_model
+        for item_model in get_concrete_agenda_item_models()
+    }
+    existing_items = {
+        (item.__class__.__name__, str(item.id)): item
+        for item in agenda.all_items
+    }
+    existing_positions = {
+        (item.__class__.__name__, str(item.id)): index
+        for index, item in enumerate(agenda.all_items)
+    }
+    requested_parents = {
+        item_data.get('type') or 'AgendaItemRegular': {}
+        for item_data in item_order
+    }
+    for item_data in item_order:
+        item_type = item_data.get('type') or 'AgendaItemRegular'
+        item_id = item_data.get('id')
+        parent_id = item_data.get('parent_id')
+        requested_parents.setdefault(item_type, {})[str(item_id)] = str(parent_id) if parent_id else None
+
+    def has_cycle(item_type: str, item_id: str, parent_id: str | None) -> bool:
+        """Return whether requested parent assignment creates a cycle."""
+        seen = {item_id}
+        current_parent = parent_id
+        while current_parent:
+            if current_parent in seen:
+                return True
+            seen.add(current_parent)
+            current_parent = requested_parents.get(item_type, {}).get(current_parent)
+        return False
     
     for index, item_data in enumerate(item_order):
         item_id = item_data.get('id')
         parent_id = item_data.get('parent_id')
-        
-        try:
-            item = AgendaItemRegular.objects.get(id=item_id, agenda=agenda)
-            item.sort_order = float(index)
-            item.parent_id = parent_id if parent_id else None
-            items_to_update.append(item)
-        except AgendaItemRegular.DoesNotExist:
+        item_type = item_data.get('type') or 'AgendaItemRegular'
+        item_model = model_by_type.get(item_type, AgendaItemRegular)
+        item_key = (item_type, str(item_id))
+        item = existing_items.get(item_key)
+
+        if item is None:
             continue
-    
+
+        if item_type == 'Election' and getattr(item, 'status', None) == 'PUBLISHED':
+            original_index = existing_positions.get(item_key)
+            if original_index != index or str(item.parent_id or '') != str(parent_id or ''):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Veröffentlichte Wahlen können nicht neu angeordnet werden.'
+                }, status=400)
+
+        if parent_id:
+            parent_key = (item_type, str(parent_id))
+            if parent_key not in existing_items:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Unterordnung zwischen unterschiedlichen TOP-Typen wird nicht unterstützt.'
+                }, status=400)
+            if str(parent_id) == str(item_id) or has_cycle(item_type, str(item_id), str(parent_id)):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Ungültige TOP-Hierarchie: zirkuläre Unterordnung ist nicht erlaubt.'
+                }, status=400)
+         
+        item.sort_order = float(index)
+        item.parent_id = parent_id if parent_id else None
+        items_to_update.setdefault(item_model, []).append(item)
+     
     # Bulk update
-    if items_to_update:
-        AgendaItemRegular.objects.bulk_update(
-            items_to_update,
+    for item_model, model_items in items_to_update.items():
+        item_model.objects.bulk_update(
+            model_items,
             fields=['sort_order', 'parent_id'],
             batch_size=100
         )
@@ -395,10 +433,9 @@ def reorder_items(request, agenda_id: UUID):
     agenda.recalculate_item_numbers()
     
     # Get updated item numbers
-    updated_items = AgendaItemRegular.objects.filter(agenda=agenda)
     item_numbers = {
         str(item.id): item.item_number
-        for item in updated_items
+        for item in agenda.all_items
     }
     
     return JsonResponse({

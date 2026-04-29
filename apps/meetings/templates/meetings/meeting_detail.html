@@ -287,12 +287,17 @@
                                 <i class="bi bi-file-earmark-check"></i> Beschluss hinzufügen
                             </a>
                         {% endif %}
+                        {% if user_can_add_election %}
+                            <a href="{% url 'elections:election_create' meeting.agenda.pk %}" class="btn btn-sm btn-info">
+                                <i class="bi bi-person-check"></i> Wahl hinzufügen
+                            </a>
+                        {% endif %}
                     </div>
                 {% endif %}
             </div>
             <div class="card-body">
                 {% if meeting.has_agenda %}
-                    {% if meeting.agenda.agendaitemregular_items.exists %}
+                    {% if meeting.agenda.item_count %}
                         {% if user_can_reorder_items and meeting.agenda.is_editable %}
                             <!-- Editable View with Drag & Drop -->
                             <!-- Loading Indicator -->
@@ -305,10 +310,8 @@
                                 class="list-group agenda-items-sortable" 
                                 data-agenda-id="{{ meeting.agenda.pk }}"
                                 data-reorder-url="{% url 'agendas:reorder_items' meeting.agenda.pk %}">
-                                {% for item in meeting.agenda.agendaitemregular_items.all %}
-                                    {% if not item.parent %}
-                                        {% include 'agendas/includes/agenda_item.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_reorder=user_can_reorder_items %}
-                                    {% endif %}
+                                {% for item in agenda_items %}
+                                    {% include 'agendas/includes/agenda_item.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_reorder=user_can_reorder_items can_view_election=user_can_view_election can_edit_election=user_can_edit_election can_delete_election=user_can_delete_election %}
                                 {% endfor %}
                             </ul>
                             
@@ -319,10 +322,8 @@
                         {% else %}
                             <!-- Read-Only View (clean list format) -->
                             <ol class="agenda-items-readonly">
-                                {% for item in meeting.agenda.agendaitemregular_items.all %}
-                                    {% if not item.parent %}
-                                        {% include 'agendas/includes/agenda_item_readonly.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item %}
-                                    {% endif %}
+                                {% for item in agenda_items %}
+                                    {% include 'agendas/includes/agenda_item_readonly.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_view_election=user_can_view_election can_edit_election=user_can_edit_election can_delete_election=user_can_delete_election %}
                                 {% endfor %}
                             </ol>
                         {% endif %}

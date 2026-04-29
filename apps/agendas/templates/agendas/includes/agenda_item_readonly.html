@@ -3,23 +3,54 @@
 <li>
     <div class="item-content-readonly">
         <strong>{{ item.title }}</strong>
+        {% if item.item_type == 'Election' %}
+            <span class="badge bg-info ms-2">Wahl</span>
+            {% if item.status == 'PUBLISHED' %}
+                <span class="badge bg-success ms-1">Veröffentlicht</span>
+            {% else %}
+                <span class="badge bg-secondary ms-1">Entwurf</span>
+            {% endif %}
+        {% elif item.item_type == 'AgendaItemResolution' %}
+            <span class="badge bg-success ms-2">Beschluss</span>
+        {% endif %}
         
         <!-- View/Edit buttons (if user can edit but not reorder) -->
         {% if can_edit or can_delete %}
             <span class="item-actions-readonly">
-                {% if can_edit %}
-                    <a href="{% url 'agendas:item_update' item.pk %}" 
-                       class="btn btn-sm btn-outline-primary" 
-                       title="Bearbeiten">
-                        <i class="bi bi-pencil"></i>
+                {% if item.item_type == 'Election' and can_view_election %}
+                    <a href="{% url 'elections:election_detail' item.pk %}" class="btn btn-sm btn-outline-secondary" title="Ansehen">
+                        <i class="bi bi-eye"></i>
                     </a>
                 {% endif %}
+                {% if can_edit %}
+                    {% if item.item_type == 'Election' %}
+                        {% if can_edit_election and item.is_editable %}
+                            <a href="{% url 'elections:election_update' item.pk %}" class="btn btn-sm btn-outline-primary" title="Bearbeiten">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        <a href="{% url 'agendas:item_update' item.pk %}" 
+                           class="btn btn-sm btn-outline-primary" 
+                           title="Bearbeiten">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                    {% endif %}
+                {% endif %}
                 {% if can_delete %}
-                    <a href="{% url 'agendas:item_delete' item.pk %}" 
-                       class="btn btn-sm btn-outline-danger" 
-                       title="Löschen">
-                        <i class="bi bi-trash"></i>
-                    </a>
+                    {% if item.item_type == 'Election' %}
+                        {% if can_delete_election and item.is_deletable %}
+                            <a href="{% url 'elections:election_delete' item.pk %}" class="btn btn-sm btn-outline-danger" title="Löschen">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        <a href="{% url 'agendas:item_delete' item.pk %}" 
+                           class="btn btn-sm btn-outline-danger" 
+                           title="Löschen">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    {% endif %}
                 {% endif %}
             </span>
         {% endif %}
@@ -35,7 +66,7 @@
     {% if item.children.exists %}
         <ol>
             {% for child in item.children.all %}
-                {% include 'agendas/includes/agenda_item_readonly.html' with item=child can_edit=can_edit can_delete=can_delete %}
+                {% include 'agendas/includes/agenda_item_readonly.html' with item=child can_edit=can_edit can_delete=can_delete can_view_election=can_view_election can_edit_election=can_edit_election can_delete_election=can_delete_election %}
             {% endfor %}
         </ol>
     {% endif %}

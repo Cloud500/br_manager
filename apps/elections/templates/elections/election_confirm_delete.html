@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Wahl löschen{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-lg-6 offset-lg-3">
+            <div class="card shadow-sm border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Wahl löschen</h4>
+                </div>
+                <div class="card-body">
+                    <p>Möchten Sie die Wahl <strong>{{ object.title }}</strong> wirklich löschen?</p>
+                    <p class="text-muted">Alle kandidierenden Personen dieser Wahl werden ebenfalls gelöscht.</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'elections:election_detail' object.pk %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-trash"></i> Wahl löschen
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

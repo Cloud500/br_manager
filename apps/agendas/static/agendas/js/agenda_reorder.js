@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', function() {
     /**
      * Collect current order of all agenda items with their parent relationships
      * 
-     * @returns {Array} Array of {id: uuid, parent_id: uuid|null} objects
+     * @returns {Array} Array of {id: uuid, type: string, parent_id: uuid|null} objects
      */
     function collectItemOrder() {
         const items = [];
@@ -93,9 +93,11 @@ document.addEventListener('DOMContentLoaded', function() {
             
             listItems.forEach(item => {
                 const itemId = item.dataset.itemId;
-                
+                const itemType = item.dataset.itemType || 'AgendaItemRegular';
+                 
                 items.push({
                     id: itemId,
+                    type: itemType,
                     parent_id: parentId
                 });
                 

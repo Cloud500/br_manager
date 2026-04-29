@@ -1,17 +1,13 @@
 """Models for agendas app."""
 
 import uuid
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
 from .managers import AgendaManager
-
-if TYPE_CHECKING:
-    from apps.meetings.models import Meeting
-
 
 class Agenda(models.Model):
     """
@@ -96,7 +92,33 @@ class Agenda(models.Model):
         Returns:
             Number of items in this agenda
         """
-        return self.agendaitemregular_items.count()
+        return len(self.all_items)
+
+    @property
+    def all_items(self) -> List[models.Model]:
+        """
+        Return all concrete agenda item types sorted by agenda order.
+
+        The project uses explicit concrete agenda item models instead of a
+        polymorphism library. This helper is the central place where those
+        concrete models are combined for counting, numbering and rendering.
+        """
+        items = []
+        for item_model in get_concrete_agenda_item_models():
+            items.extend(item_model.objects.filter(agenda=self))
+        return sorted(items, key=lambda item: (item.sort_order, item.created_at, str(item.pk)))
+
+    @property
+    def top_level_items(self) -> List[models.Model]:
+        """Return all agenda items without a parent."""
+        return [item for item in self.all_items if not item.parent_id]
+
+    def next_sort_order(self) -> float:
+        """Return the next sort order across all concrete agenda item types."""
+        items = self.all_items
+        if not items:
+            return 1.0
+        return max(item.sort_order for item in items) + 1.0
     
     def reorder_items(self, item_order: List[uuid.UUID]) -> None:
         """
@@ -109,22 +131,25 @@ class Agenda(models.Model):
             item_order: List of item UUIDs in desired order
         """
         items_to_update = []
+        item_map = {item.id: item for item in self.all_items}
         
         for index, item_id in enumerate(item_order):
             try:
-                item = self.agendaitemregular_items.get(id=item_id)
+                item = item_map[item_id]
                 item.sort_order = float(index)
                 items_to_update.append(item)
-            except self.agendaitemregular_items.model.DoesNotExist:
+            except KeyError:
                 continue
         
         # Bulk update for efficiency
-        if items_to_update:
-            self.agendaitemregular_items.model.objects.bulk_update(
-                items_to_update,
-                fields=['sort_order'],
-                batch_size=100
-            )
+        for item_model in get_concrete_agenda_item_models():
+            model_items = [item for item in items_to_update if isinstance(item, item_model)]
+            if model_items:
+                item_model.objects.bulk_update(
+                    model_items,
+                    fields=['sort_order'],
+                    batch_size=100
+                )
         
         # Recalculate all item numbers
         self.recalculate_item_numbers()
@@ -139,20 +164,18 @@ class Agenda(models.Model):
         Uses bulk_update for efficient database operations.
         Processes items in hierarchical order to ensure parent numbers are set first.
         """
-        # Get all items ordered by sort_order
-        all_items = list(
-            self.agendaitemregular_items.select_related('parent').order_by('sort_order')
-        )
+        # Get all concrete item types ordered by sort_order
+        all_items = self.all_items
         
         # Reset all item numbers first
         for item in all_items:
             item.item_number = ""
         
         # Build a map: item_id -> item for quick lookup
-        item_map = {item.id: item for item in all_items}
+        item_map = {(item.__class__, item.id): item for item in all_items}
         
         # Counter dictionary: {parent_id: next_number}
-        counters: Dict[Optional[uuid.UUID], int] = {}
+        counters: Dict[Optional[Any], int] = {}
         
         def calculate_number(item):
             """Recursively calculate item number, ensuring parent is calculated first."""
@@ -161,12 +184,13 @@ class Agenda(models.Model):
                 return item.item_number
             
             parent_id = item.parent_id
-            
+            parent_key = (item.__class__, parent_id) if parent_id else None
+             
             # Initialize counter for this parent if not exists
-            if parent_id not in counters:
-                counters[parent_id] = 1
+            if parent_key not in counters:
+                counters[parent_key] = 1
             else:
-                counters[parent_id] += 1
+                counters[parent_key] += 1
             
             # Calculate item number
             if parent_id is None:
@@ -174,7 +198,7 @@ class Agenda(models.Model):
                 item.item_number = str(counters[None])
             else:
                 # Ensure parent number is calculated first
-                parent = item_map.get(parent_id)
+                parent = item_map.get((item.__class__, parent_id))
                 if parent:
                     if not parent.item_number:
                         calculate_number(parent)
@@ -182,7 +206,7 @@ class Agenda(models.Model):
                 else:
                     parent_number = ""
                 
-                item.item_number = f"{parent_number}.{counters[parent_id]}"
+                item.item_number = f"{parent_number}.{counters[parent_key]}"
             
             return item.item_number
         
@@ -190,13 +214,15 @@ class Agenda(models.Model):
         for item in all_items:
             calculate_number(item)
         
-        # Bulk update all items
-        if all_items:
-            self.agendaitemregular_items.model.objects.bulk_update(
-                all_items,
-                fields=['item_number'],
-                batch_size=100
-            )
+        # Bulk update all items grouped by concrete model
+        for item_model in get_concrete_agenda_item_models():
+            model_items = [item for item in all_items if isinstance(item, item_model)]
+            if model_items:
+                item_model.objects.bulk_update(
+                    model_items,
+                    fields=['item_number'],
+                    batch_size=100
+                )
 
 
 class AgendaItem(models.Model):
@@ -338,9 +364,9 @@ class AgendaItem(models.Model):
         type_names = {
             'AgendaItemRegular': 'Normaler TOP',
             'AgendaItemResolution': 'Beschluss',
-            'AgendaItemElection': 'Wahl',
+            'Election': 'Wahl',
         }
-        return type_names.get(self.item_type, self.item_type)
+        return type_names.get(self.item_type, self.item_type or 'Unbekannt')
 
 
 class AgendaItemRegular(AgendaItem):
@@ -428,4 +454,16 @@ class AgendaItemResolution(AgendaItem):
                     'resolution': f'Beschluss von "{resolution_committee.name}" kann nicht zur Tagesordnung '
                                  f'von "{meeting_committee.name}" hinzugefügt werden'
                 })
-        ordering = ['sort_order', 'item_number']
+def get_concrete_agenda_item_models() -> List[type[models.Model]]:
+    """Return concrete agenda item models known to the agenda subsystem."""
+    item_models = [AgendaItemRegular, AgendaItemResolution]
+
+    try:
+        from apps.elections.models import Election
+    except (ImportError, LookupError, RuntimeError):
+        Election = None
+
+    if Election is not None:
+        item_models.append(Election)
+
+    return item_models
