@@ -16,7 +16,7 @@ from django.views.generic import (
     View,
 )
 
-from apps.committees.forms import MembershipForm
+from apps.committees.forms import CommitteeForm, CommitteeUpdateForm, MembershipForm
 from apps.committees.mixins import CommitteeContextMixin, CommitteePermissionMixin
 from apps.committees.models import Committee, Membership
 from apps.committees.utils import get_substitute_suggestions
@@ -120,32 +120,9 @@ class CommitteeCreateView(LoginRequiredMixin, CommitteePermissionMixin, CreateVi
     """Create new committee."""
     
     model = Committee
+    form_class = CommitteeForm
     template_name = 'committees/committee_form.html'
     required_permission = 'committee.create'
-    fields = [
-        'name',
-        'committee_type',
-        'parent',
-        'description',
-        'total_seats',
-        'quorum_type',
-        'personnel_enabled',
-        'substitute_logic_enabled',
-        'minority_gender',
-        'minority_min_count',
-    ]
-    
-    def get_form(self, form_class=None):
-        """Filter parent committee choices."""
-        form = super().get_form(form_class)
-        
-        # Filter parent to only MAIN committees
-        form.fields['parent'].queryset = Committee.objects.filter(
-            committee_type='MAIN',
-            is_active=True
-        )
-        
-        return form
     
     def get_success_url(self) -> str:
         """Redirect to committee detail."""
@@ -165,19 +142,9 @@ class CommitteeUpdateView(
     """Update committee."""
     
     model = Committee
+    form_class = CommitteeUpdateForm
     template_name = 'committees/committee_form.html'
     required_permission = 'committee.edit'
-    fields = [
-        'name',
-        'description',
-        'total_seats',
-        'quorum_type',
-        'personnel_enabled',
-        'substitute_logic_enabled',
-        'minority_gender',
-        'minority_min_count',
-        'is_active',
-    ]
     
     def get_success_url(self) -> str:
         """Redirect to committee detail."""

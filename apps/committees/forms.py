@@ -6,6 +6,103 @@ from apps.committees.models import Committee, Membership
 from apps.committees.utils import suggest_default_role
 
 
+class CommitteeForm(forms.ModelForm):
+    """Form for creating and editing committees."""
+    
+    class Meta:
+        model = Committee
+        fields = [
+            'name',
+            'committee_type',
+            'parent',
+            'description',
+            'total_seats',
+            'quorum_type',
+            'personnel_enabled',
+            'substitute_logic_enabled',
+            'can_create_resolutions',
+            'minority_gender',
+            'minority_min_count',
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'committee_type': forms.Select(attrs={'class': 'form-select'}),
+            'parent': forms.Select(attrs={'class': 'form-select'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'total_seats': forms.NumberInput(attrs={'class': 'form-control'}),
+            'quorum_type': forms.Select(attrs={'class': 'form-select'}),
+            'personnel_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'substitute_logic_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'can_create_resolutions': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'minority_gender': forms.Select(attrs={'class': 'form-select'}),
+            'minority_min_count': forms.NumberInput(attrs={'class': 'form-control'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        """Initialize form and handle Betriebsausschuss logic."""
+        super().__init__(*args, **kwargs)
+        
+        # Filter parent to only MAIN committees
+        self.fields['parent'].queryset = Committee.objects.filter(
+            committee_type='MAIN',
+            is_active=True
+        )
+        
+        # Handle can_create_resolutions for Betriebsausschuss
+        if self.instance and self.instance.pk:
+            if self.instance.committee_type == 'COMMITTEE':
+                # BA cannot create resolutions for itself
+                self.fields['can_create_resolutions'].initial = False
+                self.fields['can_create_resolutions'].disabled = True
+                self.fields['can_create_resolutions'].help_text = (
+                    'Betriebsausschuss kann nur Vorschläge für BR erstellen (§ 27 BetrVG)'
+                )
+
+
+class CommitteeUpdateForm(forms.ModelForm):
+    """Form for updating committees."""
+    
+    class Meta:
+        model = Committee
+        fields = [
+            'name',
+            'description',
+            'total_seats',
+            'quorum_type',
+            'personnel_enabled',
+            'substitute_logic_enabled',
+            'can_create_resolutions',
+            'minority_gender',
+            'minority_min_count',
+            'is_active',
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'total_seats': forms.NumberInput(attrs={'class': 'form-control'}),
+            'quorum_type': forms.Select(attrs={'class': 'form-select'}),
+            'personnel_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'substitute_logic_enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'can_create_resolutions': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'minority_gender': forms.Select(attrs={'class': 'form-select'}),
+            'minority_min_count': forms.NumberInput(attrs={'class': 'form-control'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        """Initialize form and handle Betriebsausschuss logic."""
+        super().__init__(*args, **kwargs)
+        
+        # Handle can_create_resolutions for Betriebsausschuss
+        if self.instance and self.instance.committee_type == 'COMMITTEE':
+            # BA cannot create resolutions for itself
+            self.fields['can_create_resolutions'].initial = False
+            self.fields['can_create_resolutions'].disabled = True
+            self.fields['can_create_resolutions'].help_text = (
+                'Betriebsausschuss kann nur Vorschläge für BR erstellen (§ 27 BetrVG)'
+            )
+
+
 class MembershipForm(forms.ModelForm):
     """Form for creating and editing memberships."""
     

@@ -260,6 +260,13 @@ class Committee(models.Model):
         help_text='Vom Betriebsrat delegierte Aufgaben zur selbständigen Erledigung (§ 27 Abs. 2 BetrVG)'
     )
     
+    # Resolution configuration
+    can_create_resolutions = models.BooleanField(
+        default=False,
+        verbose_name='Beschlüsse erstellen erlauben',
+        help_text='Erlaubt diesem Gremium Beschlüsse zu erstellen (Betriebsausschuss automatisch)'
+    )
+    
     class Meta:
         verbose_name = 'Gremium'
         verbose_name_plural = 'Gremien'
@@ -323,6 +330,9 @@ class Committee(models.Model):
         
         # Betriebsausschuss specific validation (§ 27 BetrVG)
         if self.committee_type == 'COMMITTEE':
+            # BA cannot create resolutions for itself, only proposals for BR
+            self.can_create_resolutions = False
+            
             # COMMITTEE must have MAIN parent
             if self.parent and self.parent.committee_type != 'MAIN':
                 raise ValidationError({
