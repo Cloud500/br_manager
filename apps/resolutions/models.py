@@ -7,8 +7,12 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
+
+from apps.agendas.models import AgendaItem
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
@@ -256,8 +260,8 @@ class Resolution(models.Model):
         
         # Check if linked to agenda item in a non-DRAFT meeting
         if hasattr(self, 'agenda_items') and self.agenda_items.exists():
-            for agenda_item in self.agenda_items.all():
-                if agenda_item.agenda.meeting.status not in ['DRAFT', 'IN_PROGRESS']:
+            for agenda_item in self.agenda_items.select_related('agenda_item__agenda__meeting'):
+                if agenda_item.agenda_item.agenda.meeting.status not in ['DRAFT', 'IN_PROGRESS']:
                     return False
         
         return True
@@ -376,3 +380,92 @@ class Resolution(models.Model):
                 return True
         
         return False
+
+
+class ResolutionAgendaItem(models.Model):
+    """Links a resolution to a concrete agenda item."""
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+    agenda_item = models.OneToOneField(
+        AgendaItem,
+        on_delete=models.CASCADE,
+        related_name='resolution_link',
+        verbose_name='Tagesordnungspunkt'
+    )
+    resolution = models.ForeignKey(
+        Resolution,
+        on_delete=models.CASCADE,
+        related_name='agenda_items',
+        verbose_name='Beschluss'
+    )
+
+    class Meta:
+        verbose_name = 'Beschluss-TOP'
+        verbose_name_plural = 'Beschluss-TOPs'
+        ordering = ['agenda_item__agenda', 'agenda_item__sort_order']
+
+    def __str__(self) -> str:
+        """Return display label."""
+        return f'{self.agenda_item} - {self.resolution}'
+
+    @property
+    def agenda(self):
+        """Return linked agenda."""
+        return self.agenda_item.agenda
+
+    @property
+    def title(self) -> str:
+        """Return linked TOP title."""
+        return self.agenda_item.title
+
+    @property
+    def description(self) -> str:
+        """Return linked TOP description."""
+        return self.agenda_item.description
+
+    @property
+    def item_number(self) -> str:
+        """Return linked TOP number."""
+        return self.agenda_item.item_number
+
+    def clean(self) -> None:
+        """Validate resolution agenda item."""
+        super().clean()
+        if self.agenda_item_id and self.agenda_item.item_type != AgendaItem.TYPE_RESOLUTION:
+            raise ValidationError('Ein Beschluss-TOP muss mit einem Beschluss-TOP verknüpft sein.')
+        if self.resolution_id and self.agenda_item_id:
+            if self.resolution.status != 'PROPOSED':
+                raise ValidationError('Nur vorgeschlagene Beschlüsse können zur Tagesordnung hinzugefügt werden.')
+
+            meeting_committee = self.agenda_item.agenda.meeting.committee
+            resolution_committee = self.resolution.committee
+            if resolution_committee != meeting_committee:
+                allowed_subcommittee = (
+                    resolution_committee.parent_id == meeting_committee.id
+                    and self.resolution.propose_to_main_committee
+                )
+                if not allowed_subcommittee:
+                    raise ValidationError('Der Beschluss passt nicht zum Gremium dieser Sitzung.')
+
+    def save(self, *args, **kwargs) -> None:
+        """Save with validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        """Delete the linked agenda item as the owning TOP."""
+        if self.agenda_item_id:
+            return self.agenda_item.delete(*args, **kwargs)
+        return super().delete(*args, **kwargs)
+
+
+@receiver(pre_delete, sender=Resolution)
+def delete_resolution_agenda_items(sender, instance: Resolution, **kwargs) -> None:
+    """Delete owning agenda items when a linked resolution is deleted directly."""
+    agenda_items = [link.agenda_item for link in instance.agenda_items.select_related('agenda_item')]
+    for agenda_item in agenda_items:
+        agenda_item.delete()

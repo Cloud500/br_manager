@@ -22,6 +22,8 @@ def seed_agenda_permissions(apps, schema_editor):
          'Normale TOPs bearbeiten', 'agenda'),
         ('agenda.delete_item_regular', 'Normalen TOP löschen',
          'Normale TOPs löschen', 'agenda'),
+        ('agenda.add_item_resolution', 'Beschluss-TOP hinzufügen',
+         'Beschlüsse zur Tagesordnung hinzufügen', 'agenda'),
         ('agenda.reorder_items', 'TOPs neu anordnen',
          'Reihenfolge und Hierarchie ändern', 'agenda'),
     ]
@@ -55,7 +57,7 @@ def seed_agenda_permissions(apps, schema_editor):
         chair = Role.objects.get(codename='CHAIR')
         chair_perm_codes = [
             'agenda.view', 'agenda.add_item_regular', 'agenda.edit_item_regular',
-            'agenda.delete_item_regular', 'agenda.reorder_items'
+            'agenda.delete_item_regular', 'agenda.add_item_resolution', 'agenda.reorder_items'
         ]
         for code in chair_perm_codes:
             perm = created_permissions.get(code)
@@ -72,7 +74,7 @@ def seed_agenda_permissions(apps, schema_editor):
         vice_chair = Role.objects.get(codename='VICE_CHAIR')
         vice_chair_perm_codes = [
             'agenda.view', 'agenda.add_item_regular', 'agenda.edit_item_regular',
-            'agenda.delete_item_regular', 'agenda.reorder_items'
+            'agenda.delete_item_regular', 'agenda.add_item_resolution', 'agenda.reorder_items'
         ]
         for code in vice_chair_perm_codes:
             perm = created_permissions.get(code)
@@ -89,7 +91,7 @@ def seed_agenda_permissions(apps, schema_editor):
         clerk = Role.objects.get(codename='CLERK')
         clerk_perm_codes = [
             'agenda.view', 'agenda.add_item_regular', 'agenda.edit_item_regular',
-            'agenda.delete_item_regular', 'agenda.reorder_items'
+            'agenda.delete_item_regular', 'agenda.add_item_resolution', 'agenda.reorder_items'
         ]
         for code in clerk_perm_codes:
             perm = created_permissions.get(code)

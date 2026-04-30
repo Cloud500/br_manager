@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             listItems.forEach(item => {
                 const itemId = item.dataset.itemId;
-                const itemType = item.dataset.itemType || 'AgendaItemRegular';
+                const itemType = item.dataset.itemType || 'REGULAR';
                  
                 items.push({
                     id: itemId,

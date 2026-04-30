@@ -2,16 +2,18 @@
 
 import json
 from datetime import date, time
+
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
 
 from apps.accounts.factories import UserFactory
-from apps.agendas.models import AgendaItemRegular, AgendaItemResolution
+from apps.agendas.models import AgendaItem
 from apps.committees.factories import MainCommitteeFactory
 from apps.committees.models import Membership
 from apps.elections.models import Election, ElectionCandidate
 from apps.meetings.models import Meeting
-from apps.resolutions.models import Resolution
+from apps.resolutions.models import Resolution, ResolutionAgendaItem
 from apps.roles.models import Permission, Role, RolePermission
 
 
@@ -71,7 +73,7 @@ class ElectionViewTests(TestCase):
 
     def test_member_can_view_but_not_create_or_edit_election(self):
         """View permission does not grant preparatory write permissions."""
-        election = Election.objects.create(agenda=self.agenda, title='Wahl des Vorsitzes')
+        election = self._election(title='Wahl des Vorsitzes')
         ElectionCandidate.objects.create(election=election, name='Max Mustermann')
         self.client.force_login(self.member_user)
 
@@ -86,7 +88,7 @@ class ElectionViewTests(TestCase):
 
     def test_published_election_is_read_only_in_views(self):
         """Published election blocks edit/delete even for users with write permission."""
-        election = Election.objects.create(agenda=self.agenda, title='Wahl des Vorsitzes')
+        election = self._election(title='Wahl des Vorsitzes')
         ElectionCandidate.objects.create(election=election, name='Max Mustermann')
         election.publish()
         self.client.force_login(self.chair_user)
@@ -103,7 +105,10 @@ class ElectionViewTests(TestCase):
         role = self._role('NO_ELECTION_VIEW', 'Sitzungsansicht ohne Wahlrecht')
         self._permission('meeting.view', role)
         self._membership(user, role)
-        Election.objects.create(agenda=self.agenda, title='Vertrauliche Wahl')
+        regular = self._regular(title='Bericht', sort_order=1)
+        election = self._election(title='Vertrauliche Wahl', sort_order=2)
+        election.agenda_item.parent = regular
+        election.agenda_item.save()
         self.client.force_login(user)
 
         response = self.client.get(reverse('meetings:meeting_detail', kwargs={'pk': self.meeting.pk}))
@@ -113,8 +118,8 @@ class ElectionViewTests(TestCase):
 
     def test_reorder_blocks_published_election_changes(self):
         """Published election TOPs cannot be moved through AJAX reorder."""
-        regular = AgendaItemRegular.objects.create(agenda=self.agenda, title='Bericht', sort_order=1)
-        election = Election.objects.create(agenda=self.agenda, title='Wahl', sort_order=2)
+        regular = self._regular(title='Bericht', sort_order=1)
+        election = self._election(title='Wahl', sort_order=2)
         ElectionCandidate.objects.create(election=election, name='Max Mustermann')
         election.publish()
         self.client.force_login(self.chair_user)
@@ -123,73 +128,71 @@ class ElectionViewTests(TestCase):
             reverse('agendas:reorder_items', kwargs={'agenda_id': self.agenda.pk}),
             data=json.dumps({
                 'item_order': [
-                    {'id': str(election.pk), 'type': 'Election', 'parent_id': None},
-                    {'id': str(regular.pk), 'type': 'AgendaItemRegular', 'parent_id': None},
+                    {'id': str(election.agenda_item.pk), 'type': 'ELECTION', 'parent_id': None},
+                    {'id': str(regular.pk), 'type': 'REGULAR', 'parent_id': None},
                 ]
             }),
             content_type='application/json',
         )
 
         self.assertEqual(response.status_code, 400)
-        election.refresh_from_db()
+        election.agenda_item.refresh_from_db()
         self.assertEqual(election.sort_order, 2)
 
-    def test_reorder_allows_draft_election_below_regular_top(self):
-        """Draft elections can be nested below regular TOPs and get sub numbering."""
-        regular = AgendaItemRegular.objects.create(agenda=self.agenda, title='Bericht', sort_order=1)
-        election = Election.objects.create(agenda=self.agenda, title='Wahl', sort_order=2)
-        self.client.force_login(self.chair_user)
-
-        response = self.client.post(
-            reverse('agendas:reorder_items', kwargs={'agenda_id': self.agenda.pk}),
-            data=json.dumps({
-                'item_order': [
-                    {'id': str(regular.pk), 'type': 'AgendaItemRegular', 'parent_id': None},
-                    {
-                        'id': str(election.pk),
-                        'type': 'Election',
-                        'parent_id': str(regular.pk),
-                        'parent_type': 'AgendaItemRegular',
-                    },
-                ]
-            }),
-            content_type='application/json',
+    def test_resolution_agenda_item_requires_proposed_resolution(self):
+        """Only proposed resolutions can be linked to agenda TOPs."""
+        resolution = Resolution.objects.create(
+            committee=self.committee,
+            proposal='Entwurf',
+            status='DRAFT',
+            created_by=self.chair_user,
+        )
+        agenda_item = AgendaItem.objects.create(
+            agenda=self.agenda,
+            title='Beschluss-Entwurf',
+            sort_order=1,
+            item_type=AgendaItem.TYPE_RESOLUTION,
         )
 
-        self.assertEqual(response.status_code, 200)
-        election.refresh_from_db()
-        self.assertEqual(election.parent_regular, regular)
-        self.assertEqual(election.parent_id, None)
-        self.assertEqual(election.item_number, '1.1')
-        self.assertEqual(response.json()['item_numbers'][str(election.pk)], '1.1')
+        with self.assertRaises(ValidationError):
+            ResolutionAgendaItem.objects.create(agenda_item=agenda_item, resolution=resolution)
 
-    def test_reorder_allows_resolution_below_regular_top(self):
-        """Resolution TOPs can be nested below regular TOPs and get sub numbering."""
-        regular = AgendaItemRegular.objects.create(agenda=self.agenda, title='Bericht', sort_order=1)
+    def test_deleting_resolution_removes_resolution_agenda_item_top(self):
+        """Direct resolution deletion removes the owning agenda TOP too."""
         resolution = Resolution.objects.create(
             committee=self.committee,
             proposal='Anschaffung neuer Hardware',
             status='PROPOSED',
             created_by=self.chair_user,
         )
-        resolution_item = AgendaItemResolution.objects.create(
+        agenda_item = AgendaItem.objects.create(
             agenda=self.agenda,
             title='Beschluss Hardware',
-            resolution=resolution,
-            sort_order=2,
+            sort_order=1,
+            item_type=AgendaItem.TYPE_RESOLUTION,
         )
+        ResolutionAgendaItem.objects.create(agenda_item=agenda_item, resolution=resolution)
+
+        resolution.delete()
+
+        self.assertFalse(AgendaItem.objects.filter(pk=agenda_item.pk).exists())
+
+    def test_reorder_allows_draft_election_below_regular_top(self):
+        """Draft elections can be nested below regular TOPs and get sub numbering."""
+        regular = self._regular(title='Bericht', sort_order=1)
+        election = self._election(title='Wahl', sort_order=2)
         self.client.force_login(self.chair_user)
 
         response = self.client.post(
             reverse('agendas:reorder_items', kwargs={'agenda_id': self.agenda.pk}),
             data=json.dumps({
                 'item_order': [
-                    {'id': str(regular.pk), 'type': 'AgendaItemRegular', 'parent_id': None},
+                    {'id': str(regular.pk), 'type': 'REGULAR', 'parent_id': None},
                     {
-                        'id': str(resolution_item.pk),
-                        'type': 'AgendaItemResolution',
+                        'id': str(election.agenda_item.pk),
+                        'type': 'ELECTION',
                         'parent_id': str(regular.pk),
-                        'parent_type': 'AgendaItemRegular',
+                        'parent_type': 'REGULAR',
                     },
                 ]
             }),
@@ -197,15 +200,54 @@ class ElectionViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        resolution_item.refresh_from_db()
-        self.assertEqual(resolution_item.parent_regular, regular)
-        self.assertEqual(resolution_item.parent_id, None)
+        election.agenda_item.refresh_from_db()
+        self.assertEqual(election.agenda_item.parent, regular)
+        self.assertEqual(election.item_number, '1.1')
+        self.assertEqual(response.json()['item_numbers'][str(election.agenda_item.pk)], '1.1')
+
+    def test_reorder_allows_resolution_below_regular_top(self):
+        """Resolution TOPs can be nested below regular TOPs and get sub numbering."""
+        regular = self._regular(title='Bericht', sort_order=1)
+        resolution = Resolution.objects.create(
+            committee=self.committee,
+            proposal='Anschaffung neuer Hardware',
+            status='PROPOSED',
+            created_by=self.chair_user,
+        )
+        agenda_item = AgendaItem.objects.create(
+            agenda=self.agenda,
+            title='Beschluss Hardware',
+            sort_order=2,
+            item_type=AgendaItem.TYPE_RESOLUTION,
+        )
+        resolution_item = ResolutionAgendaItem.objects.create(agenda_item=agenda_item, resolution=resolution)
+        self.client.force_login(self.chair_user)
+
+        response = self.client.post(
+            reverse('agendas:reorder_items', kwargs={'agenda_id': self.agenda.pk}),
+            data=json.dumps({
+                'item_order': [
+                    {'id': str(regular.pk), 'type': 'REGULAR', 'parent_id': None},
+                    {
+                        'id': str(agenda_item.pk),
+                        'type': 'RESOLUTION',
+                        'parent_id': str(regular.pk),
+                        'parent_type': 'REGULAR',
+                    },
+                ]
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        agenda_item.refresh_from_db()
+        self.assertEqual(agenda_item.parent, regular)
         self.assertEqual(resolution_item.item_number, '1.1')
-        self.assertEqual(response.json()['item_numbers'][str(resolution_item.pk)], '1.1')
+        self.assertEqual(response.json()['item_numbers'][str(agenda_item.pk)], '1.1')
 
     def test_reorder_rejects_cycles(self):
         """AJAX reorder rejects self-parenting/cyclic TOP hierarchies."""
-        regular = AgendaItemRegular.objects.create(agenda=self.agenda, title='Bericht')
+        regular = self._regular(title='Bericht')
         self.client.force_login(self.chair_user)
 
         response = self.client.post(
@@ -214,7 +256,7 @@ class ElectionViewTests(TestCase):
                 'item_order': [
                     {
                         'id': str(regular.pk),
-                        'type': 'AgendaItemRegular',
+                        'type': 'REGULAR',
                         'parent_id': str(regular.pk),
                     },
                 ]
@@ -223,6 +265,25 @@ class ElectionViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def _regular(self, title='TOP', sort_order=1):
+        """Create a regular agenda item."""
+        return AgendaItem.objects.create(
+            agenda=self.agenda,
+            title=title,
+            sort_order=sort_order,
+            item_type=AgendaItem.TYPE_REGULAR,
+        )
+
+    def _election(self, title='Wahl', sort_order=1):
+        """Create an election with linked agenda item."""
+        agenda_item = AgendaItem.objects.create(
+            agenda=self.agenda,
+            title=title,
+            sort_order=sort_order,
+            item_type=AgendaItem.TYPE_ELECTION,
+        )
+        return Election.objects.create(agenda_item=agenda_item)
 
     def _role(self, codename, name):
         """Return or create a committee role."""

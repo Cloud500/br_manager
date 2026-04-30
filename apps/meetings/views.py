@@ -137,7 +137,7 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
             context['user_can_reorder_items'] = user_has_agenda_permission('agenda.reorder_items')
             context['agenda_items'] = [
                 item for item in self.object.agenda.top_level_items
-                if item.item_type != 'Election' or context['user_can_view_election']
+                if item.item_type != 'ELECTION' or context['user_can_view_election']
             ]
         else:
             # No agenda - set all permissions to False

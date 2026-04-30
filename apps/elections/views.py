@@ -61,9 +61,7 @@ class ElectionCreateView(LoginRequiredMixin, ElectionPermissionMixin, CreateView
             return self.form_invalid(form)
 
         with transaction.atomic():
-            self.object = form.save(commit=False)
-            self.object.sort_order = agenda.next_sort_order()
-            self.object.save()
+            self.object = form.save()
             candidate_formset.instance = self.object
             candidates = candidate_formset.save(commit=False)
             for index, candidate in enumerate(candidates):

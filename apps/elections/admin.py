@@ -25,23 +25,23 @@ class ElectionAdmin(admin.ModelAdmin):
         'election_type',
         'majority_type',
         'status',
-        'created_at',
+        'agenda_item_created_at',
     ]
-    list_filter = ['status', 'election_type', 'majority_type', 'agenda__meeting__committee']
-    search_fields = ['title', 'description', 'candidates__name', 'agenda__meeting__title']
-    readonly_fields = ['id', 'item_number', 'item_type', 'created_at', 'updated_at']
-    ordering = ['agenda', 'sort_order']
+    list_filter = ['status', 'election_type', 'majority_type', 'agenda_item__agenda__meeting__committee']
+    search_fields = ['agenda_item__title', 'agenda_item__description', 'candidates__name', 'agenda_item__agenda__meeting__title']
+    readonly_fields = ['item_number', 'title', 'agenda', 'description']
+    ordering = ['agenda_item__agenda', 'agenda_item__sort_order']
     inlines = [ElectionCandidateInline]
 
     fieldsets = [
-        ('Tagesordnung', {'fields': ['agenda', 'parent']}),
-        ('Wahl', {'fields': ['title', 'description', 'election_type', 'majority_type', 'status']}),
-        ('Sortierung', {'fields': ['sort_order']}),
-        ('System-Informationen', {
-            'fields': ['id', 'item_number', 'item_type', 'created_at', 'updated_at'],
-            'classes': ['collapse']
-        }),
+        ('Tagesordnung', {'fields': ['agenda_item', 'agenda', 'item_number', 'title', 'description']}),
+        ('Wahl', {'fields': ['election_type', 'majority_type', 'status']}),
     ]
+
+    def agenda_item_created_at(self, obj):
+        """Display agenda item creation timestamp."""
+        return obj.agenda_item.created_at
+    agenda_item_created_at.short_description = 'Erstellt am'
 
 
 @admin.register(ElectionCandidate)
@@ -49,6 +49,6 @@ class ElectionCandidateAdmin(admin.ModelAdmin):
     """Admin interface for election candidates."""
 
     list_display = ['name', 'election', 'sort_order']
-    list_filter = ['election__status', 'election__agenda__meeting__committee']
-    search_fields = ['name', 'election__title']
+    list_filter = ['election__status', 'election__agenda_item__agenda__meeting__committee']
+    search_fields = ['name', 'election__agenda_item__title']
     ordering = ['election', 'sort_order', 'name']

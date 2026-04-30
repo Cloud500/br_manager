@@ -1,24 +1,16 @@
 """Forms for agendas app."""
 
 from django import forms
-from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 
-from .models import AgendaItemRegular, AgendaItemResolution
+from .models import AgendaItem
 
 
 class AgendaItemRegularForm(forms.ModelForm):
-    """
-    Form for creating and editing regular agenda items.
-    
-    Fields:
-        title: Item title
-        description: Optional detailed description
-        parent: Optional parent item for hierarchical structure
-    """
-    
+    """Form for creating and editing regular agenda items."""
+
     class Meta:
-        model = AgendaItemRegular
+        model = AgendaItem
         fields = ['title', 'description', 'parent']
         widgets = {
             'title': forms.TextInput(attrs={
@@ -30,9 +22,7 @@ class AgendaItemRegularForm(forms.ModelForm):
                 'rows': 4,
                 'placeholder': 'Optional: Ausführliche Beschreibung des Tagesordnungspunktes'
             }),
-            'parent': forms.Select(attrs={
-                'class': 'form-select'
-            }),
+            'parent': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
             'title': 'Titel',
@@ -44,87 +34,51 @@ class AgendaItemRegularForm(forms.ModelForm):
             'description': 'Optional: Ausführliche Beschreibung',
             'parent': 'Optional: Wählen Sie einen übergeordneten TOP für hierarchische Struktur (z.B. TOP 1.1)',
         }
-    
+
     def __init__(self, *args, agenda=None, **kwargs):
-        """
-        Initialize form with agenda context.
-        
-        Filters parent dropdown to show only items from the same agenda.
-        
-        Args:
-            agenda: Agenda instance to filter parent choices
-            *args: Positional arguments
-            **kwargs: Keyword arguments
-        """
+        """Initialize form with agenda context."""
         super().__init__(*args, **kwargs)
-        
-        # Store agenda for later use
         self.agenda = agenda
-        
-        # Filter parent dropdown to only show items from same agenda
         if agenda:
-            self.fields['parent'].queryset = AgendaItemRegular.objects.filter(
-                agenda=agenda
-            ).order_by('sort_order')
-        
-        # Add empty option for parent
+            queryset = AgendaItem.objects.filter(agenda=agenda).order_by('sort_order')
+            if self.instance.pk:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            self.fields['parent'].queryset = queryset
         self.fields['parent'].empty_label = '(Kein übergeordneter TOP - Hauptebene)'
-        
-        # Make description not required
         self.fields['description'].required = False
-    
-    def _post_clean(self):
-        """
-        Set agenda on instance before model validation.
-        
-        This ensures the agenda is available during clean() validation.
-        """
-        # Set agenda before calling super()._post_clean() which triggers model validation
+
+    def _post_clean(self) -> None:
+        """Set agenda and regular type before model validation."""
         if self.agenda and not self.instance.pk:
             self.instance.agenda = self.agenda
-        
+        self.instance.item_type = AgendaItem.TYPE_REGULAR
         super()._post_clean()
-    
+
     def save(self, commit=True):
-        """
-        Save the form instance.
-        
-        Args:
-            commit: Whether to save to database
-            
-        Returns:
-            AgendaItemRegular instance
-        """
+        """Save the regular agenda item."""
         instance = super().save(commit=False)
-        
-        # Ensure agenda is set
         if self.agenda:
             instance.agenda = self.agenda
-        
+        instance.item_type = AgendaItem.TYPE_REGULAR
         if commit:
             instance.save()
-        
         return instance
 
 
 class AgendaItemResolutionForm(forms.ModelForm):
-    """
-    Form for creating resolution agenda items.
-    
-    Fields:
-        resolution: Resolution to add to agenda
-        title: Item title (optional, defaults to resolution proposal)
-        description: Optional detailed description
-        parent: Optional parent item for hierarchical structure
-    """
-    
+    """Form for creating resolution agenda items."""
+
+    resolution = forms.ModelChoiceField(
+        queryset=AgendaItem.objects.none(),
+        label='Beschluss',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text='Wählen Sie einen Beschluss im Status "Vorgeschlagen"'
+    )
+
     class Meta:
-        model = AgendaItemResolution
+        model = AgendaItem
         fields = ['resolution', 'title', 'description', 'parent']
         widgets = {
-            'resolution': forms.Select(attrs={
-                'class': 'form-select'
-            }),
             'title': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'z.B. Beschluss über...'
@@ -134,108 +88,65 @@ class AgendaItemResolutionForm(forms.ModelForm):
                 'rows': 4,
                 'placeholder': 'Optional: Zusätzliche Informationen zum Beschluss'
             }),
-            'parent': forms.Select(attrs={
-                'class': 'form-select'
-            }),
+            'parent': forms.Select(attrs={'class': 'form-select'}),
         }
         labels = {
-            'resolution': 'Beschluss',
             'title': 'Titel',
             'description': 'Beschreibung',
             'parent': 'Übergeordneter TOP',
         }
         help_texts = {
-            'resolution': 'Wählen Sie einen Beschluss im Status "Vorgeschlagen"',
             'title': 'Titel für diesen Tagesordnungspunkt',
             'description': 'Optional: Zusätzliche Informationen',
             'parent': 'Optional: Wählen Sie einen übergeordneten TOP für hierarchische Struktur',
         }
-    
+
     def __init__(self, *args, agenda=None, **kwargs):
-        """
-        Initialize form with agenda context.
-        
-        Filters resolution dropdown to show only PROPOSED resolutions
-        that can be added to this agenda's meeting.
-        
-        Args:
-            agenda: Agenda instance to filter resolutions
-            *args: Positional arguments
-            **kwargs: Keyword arguments
-        """
+        """Initialize form with agenda context."""
         super().__init__(*args, **kwargs)
-        
-        # Store agenda for later use
         self.agenda = agenda
-        
-        # Filter resolutions to only show PROPOSED ones for this committee
+
         if agenda:
             from apps.resolutions.models import Resolution
-            
+
             meeting_committee = agenda.meeting.committee
-            
-            # Get resolutions that can be added:
-            # 1. PROPOSED status
-            # 2. From this committee OR from subcommittees with propose_to_main_committee=True
-            resolutions = Resolution.objects.filter(
-                status='PROPOSED'
-            ).filter(
-                models.Q(committee=meeting_committee) |
-                models.Q(committee__parent=meeting_committee, propose_to_main_committee=True)
+            resolutions = Resolution.objects.filter(status='PROPOSED').filter(
+                models.Q(committee=meeting_committee)
+                | models.Q(committee__parent=meeting_committee, propose_to_main_committee=True)
             ).exclude(
-                # Exclude resolutions already in this agenda
-                agenda_items__agenda=agenda
+                agenda_items__agenda_item__agenda=agenda
             ).select_related('committee')
-            
             self.fields['resolution'].queryset = resolutions
-            
-            # Filter parent dropdown to only show items from same agenda
-            self.fields['parent'].queryset = AgendaItemRegular.objects.filter(
-                agenda=agenda
-            ).order_by('sort_order')
-        
-        # Add empty option for parent
+            self.fields['parent'].queryset = AgendaItem.objects.filter(agenda=agenda).order_by('sort_order')
+
         self.fields['parent'].empty_label = '(Kein übergeordneter TOP - Hauptebene)'
-        
-        # Make fields not required
         self.fields['description'].required = False
         self.fields['parent'].required = False
-    
-    def _post_clean(self):
-        """
-        Set agenda on instance before model validation.
-        
-        This ensures the agenda is available during clean() validation.
-        """
-        # Set agenda before calling super()._post_clean() which triggers model validation
+
+    def _post_clean(self) -> None:
+        """Set agenda and resolution type before model validation."""
         if self.agenda and not self.instance.pk:
             self.instance.agenda = self.agenda
-        
+        self.instance.item_type = AgendaItem.TYPE_RESOLUTION
         super()._post_clean()
-    
+
     def save(self, commit=True):
-        """
-        Save the form instance.
-        
-        Auto-fills title from resolution if not provided.
-        
-        Args:
-            commit: Whether to save to database
-            
-        Returns:
-            AgendaItemResolution instance
-        """
-        instance = super().save(commit=False)
-        
-        # Ensure agenda is set
+        """Create the agenda item and its resolution wrapper."""
+        agenda_item = super().save(commit=False)
         if self.agenda:
-            instance.agenda = self.agenda
-        
-        # Auto-fill title if not provided
-        if not instance.title and instance.resolution:
-            instance.title = f"Beschluss: {instance.resolution.proposal[:100]}"
-        
+            agenda_item.agenda = self.agenda
+        agenda_item.item_type = AgendaItem.TYPE_RESOLUTION
+        if not agenda_item.title and self.cleaned_data.get('resolution'):
+            agenda_item.title = f"Beschluss: {self.cleaned_data['resolution'].proposal[:100]}"
+
         if commit:
-            instance.save()
-        
-        return instance
+            from apps.resolutions.models import ResolutionAgendaItem
+
+            with transaction.atomic():
+                agenda_item.save()
+                ResolutionAgendaItem.objects.create(
+                    agenda_item=agenda_item,
+                    resolution=self.cleaned_data['resolution']
+                )
+
+        return agenda_item

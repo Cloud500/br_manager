@@ -140,7 +140,7 @@ def reverse_resolution_permissions(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('resolutions', '0002_allow_blank_draft_resolution_numbers'),
+        ('resolutions', '0001_initial'),
         ('roles', '9999_seed_roles_and_permissions'),
     ]
 

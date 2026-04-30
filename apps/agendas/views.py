@@ -15,14 +15,7 @@ from django.views.generic import CreateView, DeleteView, UpdateView
 
 from .forms import AgendaItemRegularForm, AgendaItemResolutionForm
 from .mixins import AgendaPermissionMixin
-from .models import (
-    Agenda,
-    AgendaItemRegular,
-    AgendaItemResolution,
-    get_concrete_agenda_item_models,
-    get_item_key,
-    get_parent_key,
-)
+from .models import Agenda, AgendaItem
 
 
 class AgendaItemCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView):
@@ -32,7 +25,7 @@ class AgendaItemCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView
     Requires 'agenda.add_item_regular' permission.
     """
     
-    model = AgendaItemRegular
+    model = AgendaItem
     form_class = AgendaItemRegularForm
     template_name = 'agendas/item_form.html'
     required_permission = 'agenda.add_item_regular'
@@ -97,7 +90,7 @@ class AgendaItemResolutionCreateView(LoginRequiredMixin, AgendaPermissionMixin, 
     Requires 'agenda.add_item_resolution' permission.
     """
     
-    model = AgendaItemResolution
+    model = AgendaItem
     form_class = AgendaItemResolutionForm
     template_name = 'agendas/item_resolution_form.html'
     required_permission = 'agenda.add_item_resolution'
@@ -145,7 +138,7 @@ class AgendaItemResolutionCreateView(LoginRequiredMixin, AgendaPermissionMixin, 
         
         messages.success(
             self.request,
-            f'Beschluss "{form.instance.resolution.proposal[:50]}..." wurde zur Tagesordnung hinzugefügt.'
+            'Beschluss wurde zur Tagesordnung hinzugefügt.'
         )
         
         return response
@@ -162,10 +155,14 @@ class AgendaItemUpdateView(LoginRequiredMixin, AgendaPermissionMixin, UpdateView
     Requires 'agenda.edit_item_regular' permission.
     """
     
-    model = AgendaItemRegular
+    model = AgendaItem
     form_class = AgendaItemRegularForm
     template_name = 'agendas/item_form.html'
     required_permission = 'agenda.edit_item_regular'
+
+    def get_queryset(self):
+        """Limit editing to regular agenda items."""
+        return super().get_queryset().filter(item_type=AgendaItem.TYPE_REGULAR)
     
     def get_form_kwargs(self) -> Dict[str, Any]:
         """Add agenda to form kwargs."""
@@ -218,9 +215,13 @@ class AgendaItemDeleteView(LoginRequiredMixin, AgendaPermissionMixin, DeleteView
     Requires 'agenda.delete_item_regular' permission.
     """
     
-    model = AgendaItemRegular
+    model = AgendaItem
     template_name = 'agendas/item_confirm_delete.html'
     required_permission = 'agenda.delete_item_regular'
+
+    def get_queryset(self):
+        """Limit deletion to regular agenda items."""
+        return super().get_queryset().filter(item_type=AgendaItem.TYPE_REGULAR)
     
     def get_context_data(self, **kwargs) -> Dict[str, Any]:
         """Add agenda to context."""
@@ -357,111 +358,81 @@ def reorder_items(request, agenda_id: UUID):
             'message': 'Ungültige JSON-Daten'
         }, status=400)
     
-    # Update sort_order and parent references for each item, grouped by concrete model
-    items_to_update = {}
-    model_by_type = {
-        item_model.__name__: item_model
-        for item_model in get_concrete_agenda_item_models()
+    existing_items = {str(item.id): item for item in agenda.all_items}
+    existing_positions = {str(item.id): index for index, item in enumerate(agenda.all_items)}
+    existing_ids = set(existing_items)
+    submitted_ids = {str(item_data.get('id')) for item_data in item_order if item_data.get('id')}
+    if submitted_ids != existing_ids:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Die übermittelte TOP-Reihenfolge ist unvollständig oder ungültig.'
+        }, status=400)
+
+    requested_parents = {
+        str(item_data.get('id')): str(item_data.get('parent_id')) if item_data.get('parent_id') else None
+        for item_data in item_order
     }
-    existing_items = {get_item_key(item): item for item in agenda.all_items}
-    existing_items_by_id = {}
-    for item in agenda.all_items:
-        existing_items_by_id.setdefault(str(item.id), []).append(item)
-    existing_positions = {
-        get_item_key(item): index
-        for index, item in enumerate(agenda.all_items)
-    }
 
-    def resolve_parent_key(parent_id: str | None, parent_type: str | None = None) -> tuple[str, str] | None:
-        """Resolve a posted parent reference to a concrete agenda item key."""
-        if not parent_id:
-            return None
-        if parent_type:
-            parent_key = (parent_type, str(parent_id))
-            return parent_key if parent_key in existing_items else None
+    if any(item.is_published_election for item in existing_items.values()):
+        for index, item_data in enumerate(item_order):
+            item_id = str(item_data.get('id'))
+            parent_id = str(item_data.get('parent_id')) if item_data.get('parent_id') else None
+            item = existing_items[item_id]
+            if existing_positions[item_id] != index or str(item.parent_id) != str(parent_id):
+                return JsonResponse({
+                    'status': 'error',
+                    'message': 'Tagesordnungen mit veröffentlichten Wahlen können nicht neu angeordnet werden.'
+                }, status=400)
 
-        possible_parents = existing_items_by_id.get(str(parent_id), [])
-        if len(possible_parents) == 1:
-            return get_item_key(possible_parents[0])
-        return None
-
-    requested_parents = {}
-    for item_data in item_order:
-        item_type = item_data.get('type') or 'AgendaItemRegular'
-        item_id = item_data.get('id')
-        parent_id = item_data.get('parent_id')
-        parent_type = item_data.get('parent_type')
-        item_key = (item_type, str(item_id))
-        requested_parents[item_key] = resolve_parent_key(parent_id, parent_type)
-
-    def has_cycle(item_key: tuple[str, str], parent_key: tuple[str, str] | None) -> bool:
+    def has_cycle(item_id: str, parent_id: str | None) -> bool:
         """Return whether requested parent assignment creates a cycle."""
-        seen = {item_key}
-        current_parent = parent_key
+        seen = {item_id}
+        current_parent = parent_id
         while current_parent:
             if current_parent in seen:
                 return True
             seen.add(current_parent)
             current_parent = requested_parents.get(current_parent)
         return False
-    
+
+    items_to_update = []
     for index, item_data in enumerate(item_order):
-        item_id = item_data.get('id')
-        parent_id = item_data.get('parent_id')
-        parent_type = item_data.get('parent_type')
-        item_type = item_data.get('type') or 'AgendaItemRegular'
-        item_model = model_by_type.get(item_type, AgendaItemRegular)
-        item_key = (item_type, str(item_id))
-        item = existing_items.get(item_key)
-        parent_key = resolve_parent_key(parent_id, parent_type)
+        item_id = str(item_data.get('id'))
+        parent_id = str(item_data.get('parent_id')) if item_data.get('parent_id') else None
+        item = existing_items.get(item_id)
 
         if item is None:
             continue
 
-        if item_type == 'Election' and getattr(item, 'status', None) == 'PUBLISHED':
-            original_index = existing_positions.get(item_key)
-            if original_index != index or get_parent_key(item) != parent_key:
+        if item.is_published_election:
+            original_index = existing_positions.get(item_id)
+            if original_index != index or str(item.parent_id) != str(parent_id):
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Veröffentlichte Wahlen können nicht neu angeordnet werden.'
                 }, status=400)
 
         if parent_id:
-            if parent_key is None or parent_key not in existing_items:
+            parent = existing_items.get(parent_id)
+            if parent is None:
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Übergeordneter TOP wurde nicht gefunden.'
                 }, status=400)
-            can_use_regular_parent = hasattr(item, 'parent_regular_id') and parent_key[0] == 'AgendaItemRegular'
-            if item_type != parent_key[0] and not can_use_regular_parent:
-                return JsonResponse({
-                    'status': 'error',
-                    'message': 'Diese Unterordnung zwischen unterschiedlichen TOP-Typen wird nicht unterstützt.'
-                }, status=400)
-            if item_key == parent_key or has_cycle(item_key, parent_key):
+            if item_id == parent_id or has_cycle(item_id, parent_id):
                 return JsonResponse({
                     'status': 'error',
                     'message': 'Ungültige TOP-Hierarchie: zirkuläre Unterordnung ist nicht erlaubt.'
                 }, status=400)
-          
+
         item.sort_order = float(index)
-        if hasattr(item, 'parent_regular_id') and parent_key and parent_key[0] == 'AgendaItemRegular':
-            item.parent_id = None
-            item.parent_regular_id = parent_key[1]
-        else:
-            item.parent_id = parent_key[1] if parent_key else None
-            if hasattr(item, 'parent_regular_id'):
-                item.parent_regular_id = None
-        items_to_update.setdefault(item_model, []).append(item)
-     
-    # Bulk update
-    for item_model, model_items in items_to_update.items():
-        update_fields = ['sort_order', 'parent_id']
-        if any(hasattr(item, 'parent_regular_id') for item in model_items):
-            update_fields.append('parent_regular_id')
-        item_model.objects.bulk_update(
-            model_items,
-            fields=update_fields,
+        item.parent_id = parent_id
+        items_to_update.append(item)
+
+    if items_to_update:
+        AgendaItem.objects.bulk_update(
+            items_to_update,
+            fields=['sort_order', 'parent_id'],
             batch_size=100
         )
     

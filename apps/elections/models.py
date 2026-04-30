@@ -1,18 +1,19 @@
 """Models for elections app."""
 
+import uuid
+
 from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.agendas.models import AgendaItem
 
 
-class Election(AgendaItem):
+class Election(models.Model):
     """
-    Election agenda item.
+    Election linked to a dedicated agenda item.
 
-    Represents the preparation data for a person election as a dedicated
-    agenda item. Conducting the vote, recording results, and election rounds
-    are intentionally out of scope for this model.
+    The agenda item owns TOP hierarchy, numbering and title/description.
+    This model owns election-specific preparation data.
     """
 
     ELECTION_TYPE_PERSON = 'PERSON'
@@ -34,6 +35,18 @@ class Election(AgendaItem):
         (STATUS_PUBLISHED, 'Veröffentlicht'),
     ]
 
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name='ID'
+    )
+    agenda_item = models.OneToOneField(
+        AgendaItem,
+        on_delete=models.CASCADE,
+        related_name='election_link',
+        verbose_name='Tagesordnungspunkt'
+    )
     election_type = models.CharField(
         max_length=20,
         choices=ELECTION_TYPE_CHOICES,
@@ -54,45 +67,60 @@ class Election(AgendaItem):
         default=STATUS_DRAFT,
         verbose_name='Status'
     )
-    parent_regular = models.ForeignKey(
-        'agendas.AgendaItemRegular',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='election_children',
-        verbose_name='Übergeordneter regulärer TOP',
-        help_text='Ermöglicht Wahlen als Unter-TOP regulärer Tagesordnungspunkte'
-    )
 
     class Meta:
         verbose_name = 'Wahl'
         verbose_name_plural = 'Wahlen'
-        ordering = ['agenda', 'sort_order']
+        ordering = ['agenda_item__agenda', 'agenda_item__sort_order']
         indexes = [
-            models.Index(fields=['agenda', 'status']),
             models.Index(fields=['status']),
         ]
+
+    def __str__(self) -> str:
+        """Return the election title."""
+        return self.title
+
+    @property
+    def agenda(self):
+        """Return the agenda of the linked TOP."""
+        return self.agenda_item.agenda
+
+    @property
+    def title(self) -> str:
+        """Return the linked TOP title."""
+        return self.agenda_item.title
+
+    @property
+    def description(self) -> str:
+        """Return the linked TOP description."""
+        return self.agenda_item.description
+
+    @property
+    def item_number(self) -> str:
+        """Return the linked TOP number."""
+        return self.agenda_item.item_number
+
+    @property
+    def sort_order(self) -> float:
+        """Return the linked TOP sort order."""
+        return self.agenda_item.sort_order
 
     def clean(self) -> None:
         """Validate election data."""
         super().clean()
 
-        if self.status == self.STATUS_PUBLISHED and not self.pk:
+        if self.agenda_item_id and self.agenda_item.item_type != AgendaItem.TYPE_ELECTION:
+            raise ValidationError('Eine Wahl muss mit einem Wahl-TOP verknüpft sein.')
+
+        if self.status == self.STATUS_PUBLISHED and self._state.adding:
             raise ValidationError({
                 'status': 'Eine veröffentlichte Wahl muss zuerst als Entwurf mit Kandidierenden angelegt werden.'
             })
 
-        if self.status == self.STATUS_PUBLISHED and self.pk:
-            if not self.candidates.exists():
-                raise ValidationError({
-                    'status': 'Eine Wahl kann nur mit mindestens einer kandidierenden Person veröffentlicht werden.'
-                })
-
-        if self.parent_id and self.parent_regular_id:
-            raise ValidationError('Eine Wahl kann nur einem übergeordneten TOP zugeordnet werden.')
-
-        if self.parent_regular_id and self.parent_regular.agenda_id != self.agenda_id:
-            raise ValidationError('Der übergeordnete TOP muss zur gleichen Tagesordnung gehören.')
+        if self.status == self.STATUS_PUBLISHED and not self._state.adding and not self.candidates.exists():
+            raise ValidationError({
+                'status': 'Eine Wahl kann nur mit mindestens einer kandidierenden Person veröffentlicht werden.'
+            })
 
     def save(self, *args, **kwargs) -> None:
         """Save election while preserving published elections as read-only."""
@@ -101,16 +129,15 @@ class Election(AgendaItem):
             if original.status == self.STATUS_PUBLISHED and self._has_changed_since_publish(original):
                 raise ValidationError('Veröffentlichte Wahlen können nicht mehr bearbeitet werden.')
 
-        if not self.item_type:
-            self.item_type = self.__class__.__name__
         self.full_clean()
-
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        """Delete election unless it has already been published."""
+        """Delete election by deleting its agenda item."""
         if self.status == self.STATUS_PUBLISHED:
             raise ValidationError('Veröffentlichte Wahlen können nicht gelöscht werden.')
+        if self.agenda_item_id:
+            return self.agenda_item.delete(*args, **kwargs)
         return super().delete(*args, **kwargs)
 
     def publish(self) -> None:
@@ -141,24 +168,20 @@ class Election(AgendaItem):
         return self.status == self.STATUS_DRAFT and self.candidates.exists()
 
     def _has_changed_since_publish(self, original: 'Election') -> bool:
-        """Check if persisted fields changed after publication."""
-        fields = [
-            'agenda_id',
-            'parent_id',
-            'parent_regular_id',
-            'title',
-            'description',
-            'sort_order',
-            'election_type',
-            'majority_type',
-            'status',
-        ]
+        """Check if persisted election fields changed after publication."""
+        fields = ['agenda_item_id', 'election_type', 'majority_type', 'status']
         return any(getattr(self, field) != getattr(original, field) for field in fields)
 
 
 class ElectionCandidate(models.Model):
     """Freitext-Kandidatur for an election."""
 
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name='ID'
+    )
     election = models.ForeignKey(
         Election,
         on_delete=models.CASCADE,
