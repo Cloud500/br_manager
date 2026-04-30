@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ resolution.proposal|truncatewords:10 }} - BR-Manager{% endblock %}
+{% block title %}{{ resolution.title }} - BR-Manager{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -9,7 +9,7 @@
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="{% url 'resolutions:resolution_list' %}">Beschlüsse</a></li>
-                    <li class="breadcrumb-item active">{{ resolution.resolution_number|default:"Entwurf" }}</li>
+                    <li class="breadcrumb-item active">{{ resolution.title }}</li>
                 </ol>
             </nav>
         </div>
@@ -33,10 +33,16 @@
                     </span>
                 </div>
                 <div class="card-body">
+                    <!-- Title -->
+                    <div class="mb-4">
+                        <h6 class="text-muted">Titel</h6>
+                        <p class="lead mb-0">{{ resolution.title }}</p>
+                    </div>
+
                     <!-- Proposal -->
                     <div class="mb-4">
                         <h6 class="text-muted">Beschlussvorschlag</h6>
-                        <p class="lead">{{ resolution.proposal|linebreaks }}</p>
+                        <p>{{ resolution.proposal|linebreaks }}</p>
                     </div>
 
                     <!-- Justification -->
@@ -155,6 +161,9 @@
                                 {{ resolution.get_status_display }}
                             </span>
                         </dd>
+
+                        <dt class="col-sm-5">Titel</dt>
+                        <dd class="col-sm-7">{{ resolution.title }}</dd>
 
                         {% if resolution.propose_to_main_committee %}
                         <dt class="col-sm-5">Hauptgremium</dt>

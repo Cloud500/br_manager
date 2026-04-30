@@ -120,6 +120,7 @@ class AgendaItemResolutionForm(forms.ModelForm):
             self.fields['parent'].queryset = AgendaItem.objects.filter(agenda=agenda).order_by('sort_order')
 
         self.fields['parent'].empty_label = '(Kein übergeordneter TOP - Hauptebene)'
+        self.fields['title'].required = False
         self.fields['description'].required = False
         self.fields['parent'].required = False
 
@@ -137,7 +138,7 @@ class AgendaItemResolutionForm(forms.ModelForm):
             agenda_item.agenda = self.agenda
         agenda_item.item_type = AgendaItem.TYPE_RESOLUTION
         if not agenda_item.title and self.cleaned_data.get('resolution'):
-            agenda_item.title = f"Beschluss: {self.cleaned_data['resolution'].proposal[:100]}"
+            agenda_item.title = self.cleaned_data['resolution'].title
 
         if commit:
             from apps.resolutions.models import ResolutionAgendaItem

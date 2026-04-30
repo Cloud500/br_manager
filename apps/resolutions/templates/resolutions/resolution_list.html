@@ -70,6 +70,7 @@
                     <thead>
                         <tr>
                             <th>Beschlussnummer</th>
+                            <th>Titel</th>
                             <th>Beschlussvorschlag</th>
                             <th>Gremium</th>
                             <th>Status</th>
@@ -86,6 +87,9 @@
                                 {% else %}
                                     <span class="text-muted">-</span>
                                 {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ resolution.title }}</strong>
                             </td>
                             <td>
                                 {{ resolution.proposal|truncatewords:15 }}

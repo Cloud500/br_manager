@@ -143,6 +143,7 @@ class ElectionViewTests(TestCase):
         """Only proposed resolutions can be linked to agenda TOPs."""
         resolution = Resolution.objects.create(
             committee=self.committee,
+            title='Entwurf',
             proposal='Entwurf',
             status='DRAFT',
             created_by=self.chair_user,
@@ -161,6 +162,7 @@ class ElectionViewTests(TestCase):
         """Direct resolution deletion removes the owning agenda TOP too."""
         resolution = Resolution.objects.create(
             committee=self.committee,
+            title='Anschaffung neuer Hardware',
             proposal='Anschaffung neuer Hardware',
             status='PROPOSED',
             created_by=self.chair_user,
@@ -210,6 +212,7 @@ class ElectionViewTests(TestCase):
         regular = self._regular(title='Bericht', sort_order=1)
         resolution = Resolution.objects.create(
             committee=self.committee,
+            title='Anschaffung neuer Hardware',
             proposal='Anschaffung neuer Hardware',
             status='PROPOSED',
             created_by=self.chair_user,

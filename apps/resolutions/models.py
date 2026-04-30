@@ -23,7 +23,7 @@ class Resolution(models.Model):
     """
     Resolution model for committee decisions.
     
-    Represents a resolution (Beschluss) with proposal, justification,
+    Represents a resolution (Beschluss) with title, proposal, justification,
     and voting results. Supports status workflow and can be proposed
     to parent committees.
     
@@ -31,6 +31,7 @@ class Resolution(models.Model):
         id: UUID primary key
         committee: Committee this resolution belongs to
         resolution_number: Auto-generated number (format: YYYYMMDD-XXX)
+        title: Short display title for the resolution
         proposal: Resolution proposal text
         justification: Justification for the resolution
         is_quorate: Whether quorum was met (set during meeting)
@@ -77,6 +78,11 @@ class Resolution(models.Model):
     )
     
     # Content fields
+    title = models.CharField(
+        max_length=255,
+        verbose_name='Titel',
+        help_text='Kurzer Name zur übersichtlichen Anzeige des Beschlusses'
+    )
     proposal = models.TextField(
         verbose_name='Beschlussvorschlag',
         help_text='Der zur Abstimmung gestellte Beschlusstext'
@@ -163,8 +169,8 @@ class Resolution(models.Model):
     def __str__(self) -> str:
         """String representation of resolution."""
         if self.resolution_number:
-            return f"{self.resolution_number} - {self.proposal[:50]}"
-        return f"Entwurf - {self.proposal[:50]}"
+            return f"{self.resolution_number} - {self.title}"
+        return f"Entwurf - {self.title}"
     
     def clean(self) -> None:
         """

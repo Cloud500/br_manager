@@ -10,16 +10,16 @@ class ResolutionAdmin(admin.ModelAdmin):
     """Admin interface for Resolution model."""
     
     list_display = [
-        'resolution_number', 'proposal_short', 'committee',
+        'resolution_number', 'title', 'proposal_short', 'committee',
         'status', 'created_by', 'created_at'
     ]
     list_filter = ['status', 'committee', 'propose_to_main_committee', 'created_at']
-    search_fields = ['proposal', 'justification', 'resolution_number']
+    search_fields = ['title', 'proposal', 'justification', 'resolution_number']
     readonly_fields = ['resolution_number', 'created_at', 'updated_at', 'decided_at']
     
     fieldsets = (
         ('Grunddaten', {
-            'fields': ('committee', 'proposal', 'justification', 'propose_to_main_committee')
+            'fields': ('committee', 'title', 'proposal', 'justification', 'propose_to_main_committee')
         }),
         ('Status', {
             'fields': ('status', 'resolution_number', 'decided_at')
@@ -46,7 +46,7 @@ class ResolutionAgendaItemAdmin(admin.ModelAdmin):
 
     list_display = ['item_number', 'title', 'resolution', 'agenda']
     list_filter = ['agenda_item__agenda__meeting__committee']
-    search_fields = ['agenda_item__title', 'resolution__proposal']
+    search_fields = ['agenda_item__title', 'resolution__title', 'resolution__proposal']
     readonly_fields = ['id', 'title', 'agenda', 'item_number']
     autocomplete_fields = ['agenda_item', 'resolution']
 

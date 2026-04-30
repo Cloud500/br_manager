@@ -201,7 +201,7 @@ class ResolutionCreateView(LoginRequiredMixin, CreateView):
         
         messages.success(
             self.request,
-            f'Beschluss "{resolution.proposal[:50]}..." wurde erstellt'
+            f'Beschluss "{resolution.title}" wurde erstellt'
         )
         
         return HttpResponseRedirect(self.get_success_url())

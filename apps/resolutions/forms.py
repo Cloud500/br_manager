@@ -13,12 +13,17 @@ class ResolutionForm(forms.ModelForm):
         model = Resolution
         fields = [
             'committee',
+            'title',
             'proposal',
             'justification',
             'propose_to_main_committee',
         ]
         widgets = {
             'committee': forms.Select(attrs={'class': 'form-select'}),
+            'title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'z.B. Beschaffung neuer Arbeitsmittel'
+            }),
             'proposal': forms.Textarea(attrs={
                 'class': 'form-control',
                 'rows': 5,

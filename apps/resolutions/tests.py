@@ -18,6 +18,7 @@ class ResolutionModelTest(TestCase):
 
         first = Resolution(
             committee=committee,
+            title='First draft resolution',
             proposal='First draft resolution',
             created_by=user,
             status='DRAFT',
@@ -26,6 +27,7 @@ class ResolutionModelTest(TestCase):
 
         second = Resolution(
             committee=committee,
+            title='Second draft resolution',
             proposal='Second draft resolution',
             created_by=user,
             status='DRAFT',
@@ -33,6 +35,21 @@ class ResolutionModelTest(TestCase):
         second.save()
 
         self.assertEqual(Resolution.objects.filter(committee=committee).count(), 2)
+
+    def test_resolution_str_uses_title(self):
+        """Resolution string representation includes the title."""
+        committee = MainCommitteeFactory.create(can_create_resolutions=True)
+        user = UserFactory.create()
+
+        resolution = Resolution.objects.create(
+            committee=committee,
+            title='Neuer Beschluss',
+            proposal='Beschlusstext',
+            created_by=user,
+            status='DRAFT',
+        )
+
+        self.assertEqual(str(resolution), 'Entwurf - Neuer Beschluss')
 
 
 class ResolutionCreateViewTest(TestCase):
@@ -48,6 +65,7 @@ class ResolutionCreateViewTest(TestCase):
         """A superuser can create multiple draft resolutions for one committee."""
         payload = {
             'committee': str(self.committee.pk),
+            'title': 'Neuer Beschluss',
             'proposal': 'Draft resolution',
             'justification': '',
             'propose_to_main_committee': '',
@@ -63,11 +81,28 @@ class ResolutionCreateViewTest(TestCase):
             2,
         )
 
+    def test_create_view_accepts_title(self):
+        """The create view persists the submitted title."""
+        payload = {
+            'committee': str(self.committee.pk),
+            'title': 'Titel aus dem Formular',
+            'proposal': 'Draft resolution',
+            'justification': '',
+            'propose_to_main_committee': '',
+        }
+
+        response = self.client.post(self.url, payload)
+
+        self.assertEqual(response.status_code, 302)
+        resolution = Resolution.objects.latest('created_at')
+        self.assertEqual(resolution.title, 'Titel aus dem Formular')
+
     def test_main_committee_without_resolution_flag_returns_form_error(self):
         """Invalid main committee selection renders a form error instead of a 500."""
         committee = MainCommitteeFactory.create(can_create_resolutions=False)
         payload = {
             'committee': str(committee.pk),
+            'title': 'Draft resolution',
             'proposal': 'Draft resolution',
             'justification': '',
             'propose_to_main_committee': '',
