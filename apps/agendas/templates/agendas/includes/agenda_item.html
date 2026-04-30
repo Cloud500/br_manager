@@ -43,33 +43,49 @@
                     <a href="{% url 'elections:election_detail' item.election.pk %}" class="btn btn-outline-secondary" title="Ansehen">
                         <i class="bi bi-eye"></i>
                     </a>
+                {% elif item.item_type == 'RESOLUTION' and item.resolution_agenda_item and item.can_view_resolution %}
+                    <a href="{% url 'resolutions:resolution_detail' item.resolution_agenda_item.resolution.pk %}" class="btn btn-outline-secondary" title="Beschluss ansehen">
+                        <i class="bi bi-eye"></i>
+                    </a>
                 {% endif %}
-                {% if can_edit %}
-                    {% if item.item_type == 'ELECTION' and item.election %}
+                {% if can_edit or can_edit_resolution %}
+                    {% if item.item_type == 'ELECTION' and item.election and can_edit %}
                         {% if can_edit_election and item.election.is_editable %}
                             <a href="{% url 'elections:election_update' item.election.pk %}" class="btn btn-outline-primary" title="Bearbeiten">
                                 <i class="bi bi-pencil"></i>
                             </a>
                         {% endif %}
-                    {% elif item.item_type == 'REGULAR' %}
+                    {% elif item.item_type == 'REGULAR' and can_edit %}
                         <a href="{% url 'agendas:item_update' item.pk %}" 
                            class="btn btn-outline-primary" 
                            title="Bearbeiten">
                             <i class="bi bi-pencil"></i>
                         </a>
+                    {% elif item.item_type == 'RESOLUTION' and can_edit_resolution %}
+                        <a href="{% url 'agendas:item_update' item.pk %}"
+                           class="btn btn-outline-primary"
+                           title="Beschluss-TOP bearbeiten">
+                            <i class="bi bi-pencil"></i>
+                        </a>
                     {% endif %}
                 {% endif %}
-                {% if can_delete %}
-                    {% if item.item_type == 'ELECTION' and item.election %}
+                {% if can_delete or can_delete_resolution %}
+                    {% if item.item_type == 'ELECTION' and item.election and can_delete %}
                         {% if can_delete_election and item.election.is_deletable %}
                             <a href="{% url 'elections:election_delete' item.election.pk %}" class="btn btn-outline-danger" title="Löschen">
                                 <i class="bi bi-trash"></i>
                             </a>
                         {% endif %}
-                    {% elif item.item_type == 'REGULAR' %}
+                    {% elif item.item_type == 'REGULAR' and can_delete %}
                         <a href="{% url 'agendas:item_delete' item.pk %}" 
                            class="btn btn-outline-danger" 
                            title="Löschen">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    {% elif item.item_type == 'RESOLUTION' and can_delete_resolution %}
+                        <a href="{% url 'agendas:item_delete' item.pk %}"
+                           class="btn btn-outline-danger"
+                           title="Beschluss-TOP löschen">
                             <i class="bi bi-trash"></i>
                         </a>
                     {% endif %}
@@ -80,10 +96,8 @@
     
     <!-- Nested Items Container (always present for drag & drop) -->
     <ul class="list-group mt-2 ms-4 agenda-items-sortable" style="min-height: 0;">
-        {% for child in item.get_ordered_children %}
-            {% if child.item_type != 'ELECTION' or can_view_election %}
-                {% include 'agendas/includes/agenda_item.html' with item=child can_edit=can_edit can_delete=can_delete can_reorder=can_reorder can_view_election=can_view_election can_edit_election=can_edit_election can_delete_election=can_delete_election %}
-            {% endif %}
+        {% for child in item.visible_children %}
+            {% include 'agendas/includes/agenda_item.html' with item=child can_edit=can_edit can_delete=can_delete can_reorder=can_reorder can_view_election=can_view_election can_edit_election=can_edit_election can_delete_election=can_delete_election can_view_resolution=can_view_resolution can_edit_resolution=can_edit_resolution can_delete_resolution=can_delete_resolution %}
         {% endfor %}
     </ul>
 </li>

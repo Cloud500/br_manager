@@ -121,6 +121,9 @@ Verwendet als Basis für die Anpassung der Migrations-Dateien in `apps/*/migrati
 | Normalen TOP hinzufügen    | agenda.add_item_regular      | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
 | Normalen TOP bearbeiten    | agenda.edit_item_regular     | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
 | Normalen TOP löschen       | agenda.delete_item_regular   | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| Beschluss-TOP hinzufügen   | agenda.add_item_resolution   | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| Beschluss-TOP bearbeiten   | agenda.edit_item_resolution  | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
+| Beschluss-TOP löschen      | agenda.delete_item_resolution | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
 | TOPs neu anordnen          | agenda.reorder_items         | ✓            | ✗    | ✓     | ✓          | ✓     | ✗      | ✗          | ✗               | ✗     |
 
 ---

@@ -13,7 +13,11 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, UpdateView
 
-from .forms import AgendaItemRegularForm, AgendaItemResolutionForm
+from .forms import (
+    AgendaItemRegularForm,
+    AgendaItemResolutionForm,
+    AgendaItemResolutionUpdateForm,
+)
 from .mixins import AgendaPermissionMixin
 from .models import Agenda, AgendaItem
 
@@ -160,9 +164,24 @@ class AgendaItemUpdateView(LoginRequiredMixin, AgendaPermissionMixin, UpdateView
     template_name = 'agendas/item_form.html'
     required_permission = 'agenda.edit_item_regular'
 
+    def test_func(self) -> bool:
+        """Check the permission matching the agenda item type."""
+        item = self.get_object()
+        if item.item_type == AgendaItem.TYPE_RESOLUTION:
+            self.required_permission = 'agenda.edit_item_resolution'
+        return super().test_func()
+
     def get_queryset(self):
-        """Limit editing to regular agenda items."""
-        return super().get_queryset().filter(item_type=AgendaItem.TYPE_REGULAR)
+        """Limit editing to regular and resolution agenda items."""
+        return super().get_queryset().filter(
+            item_type__in=[AgendaItem.TYPE_REGULAR, AgendaItem.TYPE_RESOLUTION]
+        )
+
+    def get_form_class(self):
+        """Use the matching form for the agenda item type."""
+        if self.object.item_type == AgendaItem.TYPE_RESOLUTION:
+            return AgendaItemResolutionUpdateForm
+        return AgendaItemRegularForm
     
     def get_form_kwargs(self) -> Dict[str, Any]:
         """Add agenda to form kwargs."""
@@ -219,9 +238,18 @@ class AgendaItemDeleteView(LoginRequiredMixin, AgendaPermissionMixin, DeleteView
     template_name = 'agendas/item_confirm_delete.html'
     required_permission = 'agenda.delete_item_regular'
 
+    def test_func(self) -> bool:
+        """Check the permission matching the agenda item type."""
+        item = self.get_object()
+        if item.item_type == AgendaItem.TYPE_RESOLUTION:
+            self.required_permission = 'agenda.delete_item_resolution'
+        return super().test_func()
+
     def get_queryset(self):
-        """Limit deletion to regular agenda items."""
-        return super().get_queryset().filter(item_type=AgendaItem.TYPE_REGULAR)
+        """Limit deletion to regular and resolution agenda items."""
+        return super().get_queryset().filter(
+            item_type__in=[AgendaItem.TYPE_REGULAR, AgendaItem.TYPE_RESOLUTION]
+        )
     
     def get_context_data(self, **kwargs) -> Dict[str, Any]:
         """Add agenda to context."""

@@ -311,7 +311,7 @@
                                 data-agenda-id="{{ meeting.agenda.pk }}"
                                 data-reorder-url="{% url 'agendas:reorder_items' meeting.agenda.pk %}">
                                 {% for item in agenda_items %}
-                                    {% include 'agendas/includes/agenda_item.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_reorder=user_can_reorder_items can_view_election=user_can_view_election can_edit_election=user_can_edit_election can_delete_election=user_can_delete_election %}
+                                    {% include 'agendas/includes/agenda_item.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_reorder=user_can_reorder_items can_view_election=user_can_view_election can_edit_election=user_can_edit_election can_delete_election=user_can_delete_election can_view_resolution=user_can_view_resolution can_edit_resolution=user_can_edit_resolution_item can_delete_resolution=user_can_delete_resolution_item %}
                                 {% endfor %}
                             </ul>
                             
@@ -323,7 +323,7 @@
                             <!-- Read-Only View (clean list format) -->
                             <ol class="agenda-items-readonly">
                                 {% for item in agenda_items %}
-                                    {% include 'agendas/includes/agenda_item_readonly.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_view_election=user_can_view_election can_edit_election=user_can_edit_election can_delete_election=user_can_delete_election %}
+                                    {% include 'agendas/includes/agenda_item_readonly.html' with item=item can_edit=user_can_edit_item can_delete=user_can_delete_item can_view_election=user_can_view_election can_edit_election=user_can_edit_election can_delete_election=user_can_delete_election can_view_resolution=user_can_view_resolution can_edit_resolution=user_can_edit_resolution_item can_delete_resolution=user_can_delete_resolution_item %}
                                 {% endfor %}
                             </ol>
                         {% endif %}

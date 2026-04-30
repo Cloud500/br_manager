@@ -151,3 +151,59 @@ class AgendaItemResolutionForm(forms.ModelForm):
                 )
 
         return agenda_item
+
+
+class AgendaItemResolutionUpdateForm(forms.ModelForm):
+    """Form for editing title, description and parent of resolution TOPs."""
+
+    class Meta:
+        model = AgendaItem
+        fields = ['title', 'description', 'parent']
+        widgets = {
+            'title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Titel des Beschluss-TOPs'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Optional: Zusätzliche Informationen zum Beschluss'
+            }),
+            'parent': forms.Select(attrs={'class': 'form-select'}),
+        }
+        labels = {
+            'title': 'Titel',
+            'description': 'Beschreibung',
+            'parent': 'Übergeordneter TOP',
+        }
+        help_texts = {
+            'title': 'Titel für diesen Tagesordnungspunkt',
+            'description': 'Optional: Zusätzliche Informationen',
+            'parent': 'Optional: Wählen Sie einen übergeordneten TOP für hierarchische Struktur',
+        }
+
+    def __init__(self, *args, agenda=None, **kwargs):
+        """Initialize form with agenda context."""
+        super().__init__(*args, **kwargs)
+        self.agenda = agenda
+        if agenda:
+            queryset = AgendaItem.objects.filter(agenda=agenda).order_by('sort_order')
+            if self.instance.pk:
+                queryset = queryset.exclude(pk=self.instance.pk)
+            self.fields['parent'].queryset = queryset
+        self.fields['parent'].empty_label = '(Kein übergeordneter TOP - Hauptebene)'
+        self.fields['description'].required = False
+        self.fields['parent'].required = False
+
+    def _post_clean(self) -> None:
+        """Keep the resolution item type before model validation."""
+        self.instance.item_type = AgendaItem.TYPE_RESOLUTION
+        super()._post_clean()
+
+    def save(self, commit=True):
+        """Save the resolution agenda item metadata."""
+        instance = super().save(commit=False)
+        instance.item_type = AgendaItem.TYPE_RESOLUTION
+        if commit:
+            instance.save()
+        return instance

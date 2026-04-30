@@ -124,6 +124,51 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
                                 return True
                 
                 return False
+
+            def user_has_resolution_permission(resolution, permission_codename: str) -> bool:
+                """Check permission against the linked resolution's committee."""
+                if user.is_superuser or user.is_staff:
+                    return True
+
+                memberships = Membership.objects.filter(
+                    user=user,
+                    committee=resolution.committee,
+                    is_active=True,
+                ).select_related('role')
+
+                for membership in memberships:
+                    if membership.role and membership.role.permissions.filter(
+                        codename=permission_codename
+                    ).exists():
+                        return True
+
+                return False
+
+            def item_is_visible(item) -> bool:
+                """Check if an agenda item may be shown in the meeting agenda."""
+                item.can_view_resolution = False
+                if item.item_type == 'ELECTION':
+                    return context['user_can_view_election']
+                if item.item_type == 'RESOLUTION':
+                    try:
+                        resolution = item.resolution_agenda_item.resolution
+                    except Exception:
+                        return False
+                    item.can_view_resolution = user_has_resolution_permission(
+                        resolution,
+                        'resolution.view',
+                    )
+                    return item.can_view_resolution
+                return True
+
+            def with_visible_children(item):
+                """Attach recursively filtered children for template rendering."""
+                item.visible_children = [
+                    with_visible_children(child)
+                    for child in item.get_ordered_children()
+                    if item_is_visible(child)
+                ]
+                return item
             
             # Add permission flags to context
             context['user_can_add_item'] = user_has_agenda_permission('agenda.add_item_regular')
@@ -132,12 +177,16 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
             context['user_can_view_election'] = user_has_agenda_permission('election.view')
             context['user_can_edit_election'] = user_has_agenda_permission('election.edit')
             context['user_can_delete_election'] = user_has_agenda_permission('election.delete')
+            context['user_can_view_resolution'] = user_has_agenda_permission('resolution.view')
+            context['user_can_edit_resolution_item'] = user_has_agenda_permission('agenda.edit_item_resolution')
+            context['user_can_delete_resolution_item'] = user_has_agenda_permission('agenda.delete_item_resolution')
             context['user_can_edit_item'] = user_has_agenda_permission('agenda.edit_item_regular')
             context['user_can_delete_item'] = user_has_agenda_permission('agenda.delete_item_regular')
             context['user_can_reorder_items'] = user_has_agenda_permission('agenda.reorder_items')
             context['agenda_items'] = [
-                item for item in self.object.agenda.top_level_items
-                if item.item_type != 'ELECTION' or context['user_can_view_election']
+                with_visible_children(item)
+                for item in self.object.agenda.top_level_items
+                if item_is_visible(item)
             ]
         else:
             # No agenda - set all permissions to False
@@ -148,6 +197,9 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
             context['user_can_view_election'] = False
             context['user_can_edit_election'] = False
             context['user_can_delete_election'] = False
+            context['user_can_view_resolution'] = False
+            context['user_can_edit_resolution_item'] = False
+            context['user_can_delete_resolution_item'] = False
             context['user_can_edit_item'] = False
             context['user_can_delete_item'] = False
             context['user_can_reorder_items'] = False
