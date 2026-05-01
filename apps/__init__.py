@@ -1,0 +1,1 @@
+"""Local Django application package."""

@@ -74,31 +74,38 @@
             <div class="card-body">
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle"></i> 
-                    Die Einladung wird an alle aktiven Mitglieder des Gremiums 
-                    <strong>{{ meeting.committee.name }}</strong> versendet.
+                    Die Einladung wird an alle aktiven Teilnehmer dieser Sitzung
+                    <strong>{{ meeting.meeting_number }}</strong> versendet.
                 </div>
                 
                 <div class="list-group">
-                    {% for membership in meeting.committee.memberships.all %}
-                        {% if membership.is_active %}
+                    {% for participant in invitation_participants %}
                         <div class="list-group-item">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <i class="bi bi-person"></i> 
-                                    <strong>{{ membership.user.get_full_name }}</strong>
+                                    {% if participant.status == 'ABSENT' and participant.substitute_membership %}
+                                        <strong>{{ participant.substitute_name_for_display }}</strong>
+                                        <span class="text-muted">für {{ participant.display_name_for_display }}</span>
+                                    {% else %}
+                                        <strong>{{ participant.display_name_for_display }}</strong>
+                                    {% endif %}
                                     <br>
-                                    <small class="text-muted">{{ membership.user.email }}</small>
+                                    <small class="text-muted">
+                                        {% if participant.status == 'ABSENT' and participant.substitute_membership %}
+                                            {{ participant.substitute_role_for_display }}
+                                        {% else %}
+                                            {{ participant.role_for_display }}
+                                        {% endif %}
+                                    </small>
                                 </div>
-                                {% if membership.role %}
-                                <span class="badge bg-secondary">{{ membership.role.name }}</span>
-                                {% endif %}
+                                <span class="badge bg-secondary">{{ participant.get_participant_type_display }}</span>
                             </div>
                         </div>
-                        {% endif %}
                     {% empty %}
                         <div class="list-group-item text-muted">
                             <i class="bi bi-exclamation-circle"></i> 
-                            Keine aktiven Mitglieder gefunden
+                            Keine aktiven Teilnehmer gefunden
                         </div>
                     {% endfor %}
                 </div>
@@ -212,7 +219,7 @@
                     <strong>Was passiert beim Versenden?</strong>
                 </p>
                 <ul class="small mb-0">
-                    <li>E-Mail an alle Mitglieder</li>
+                    <li>E-Mail an alle aktiven Sitzungsteilnehmer</li>
                     <li>Status → "Einladung versendet"</li>
                     <li>Zeitstempel wird gesetzt</li>
                     <li>Keine Bearbeitung mehr möglich</li>

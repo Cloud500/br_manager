@@ -1,0 +1,59 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block title %}{{ title }} - {{ participant.display_name_for_display }} - BR-Manager{% endblock %}
+
+{% block meeting_content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h1 class="h4 mb-0">
+                    <i class="bi {{ icon_class }}"></i> {{ title }}
+                </h1>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-3">Sitzung</dt>
+                    <dd class="col-sm-9">{{ meeting.title }}</dd>
+                    <dt class="col-sm-3">Teilnehmer</dt>
+                    <dd class="col-sm-9">{{ participant.display_name_for_display }}</dd>
+                    <dt class="col-sm-3">Rolle / Funktion</dt>
+                    <dd class="col-sm-9">{{ participant.role_for_display }}</dd>
+                    <dt class="col-sm-3">Status</dt>
+                    <dd class="col-sm-9">{{ participant.get_status_display }}</dd>
+                </dl>
+
+                <form method="post">
+                    {% csrf_token %}
+                    {% for field in form %}
+                        <div class="mb-3{% if field.field.widget.input_type == 'checkbox' %} form-check{% endif %}">
+                            {% if field.field.widget.input_type == 'checkbox' %}
+                                {{ field }}
+                                <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {% else %}
+                                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                {{ field }}
+                            {% endif %}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% if field.errors %}
+                                <div class="invalid-feedback d-block">{{ field.errors }}</div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check2"></i> {{ submit_label }}
+                        </button>
+                        <a href="{% url 'meetings:meeting_detail' meeting.pk %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

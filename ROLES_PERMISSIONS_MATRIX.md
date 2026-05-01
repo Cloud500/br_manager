@@ -113,6 +113,18 @@ Verwendet als Basis für die Anpassung der Migrations-Dateien in `apps/*/migrati
 
 ---
 
+## APP: PARTICIPANTS (Teilnehmer-Verwaltung)
+
+| Permission                   | Codename                         | SYSTEM_ADMIN | USER | CHAIR | VICE_CHAIR | CLERK | MEMBER | SUBSTITUTE | EXTERNAL_MEMBER | GUEST |
+|------------------------------|----------------------------------|--------------|------|-------|------------|-------|--------|------------|-----------------|-------|
+| Teilnehmer anzeigen          | participant.view                 | ✓            | ✗    | ✓     | ✓          | ✓     | ✓      | ✓          | ✓               | ✓     |
+| Teilnehmer bearbeiten        | participant.edit                 | ✓            | ✗    | ✓     | ✓          | ✗     | ✗      | ✗          | ✗               | ✗     |
+| Teilnehmer abwesend setzen   | participant.mark_absent          | ✓            | ✗    | ✓     | ✓          | ✗     | ✗      | ✗          | ✗               | ✗     |
+| Ersatz verwalten             | participant.manage_substitutes   | ✓            | ✗    | ✓     | ✓          | ✗     | ✗      | ✗          | ✗               | ✗     |
+| Teilnehmer benachrichtigen   | participant.send_notifications   | ✓            | ✗    | ✓     | ✓          | ✗     | ✗      | ✗          | ✗               | ✗     |
+
+---
+
 ## APP: AGENDAS (Tagesordnungs-Verwaltung)
 
 | Permission                 | Codename                     | SYSTEM_ADMIN | USER | CHAIR | VICE_CHAIR | CLERK | MEMBER | SUBSTITUTE | EXTERNAL_MEMBER | GUEST |

@@ -1,0 +1,181 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block title %}Teilnehmer hinzufügen - {{ meeting.title }} - BR-Manager{% endblock %}
+
+{% block meeting_content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header">
+                <h1 class="h4 mb-0">
+                    <i class="bi bi-person-plus"></i> Teilnehmer hinzufügen
+                </h1>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    Es werden nur aktive Mitgliedschaften angezeigt, die noch nicht in der Teilnehmerliste dieser Sitzung stehen.
+                    Bei Ausschüssen werden das übergeordnete Gremium und Ausschüsse desselben Gremiums berücksichtigt.
+                </div>
+
+                <form method="post" id="addParticipantForm">
+                    {% csrf_token %}
+                    {{ form.membership }}
+
+                    {% if candidate_memberships %}
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Teilnehmer auswählen:</label>
+
+                            <div class="dropdown w-100">
+                                <button class="btn btn-outline-secondary btn-lg dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center"
+                                        type="button"
+                                        id="participantDropdownButton"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false">
+                                    <span id="selectedParticipantText">-- Bitte wählen --</span>
+                                </button>
+
+                                <ul class="dropdown-menu w-100 shadow-lg" aria-labelledby="participantDropdownButton" style="max-height: 500px; overflow-y: auto;">
+                                    {% for membership in candidate_memberships %}
+                                        <li>
+                                            <a class="dropdown-item participant-option p-3"
+                                               href="#"
+                                               data-id="{{ membership.pk }}"
+                                               data-name="{{ membership.user.get_full_name }}"
+                                               data-department="{{ membership.user.profile.department|default:'' }}"
+                                               data-role="{{ membership.role.name|default:'Ohne Rolle' }}"
+                                               data-committee="{{ membership.committee.name }}"
+                                               data-member-type="{{ membership.get_member_type_display }}">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="flex-grow-1">
+                                                        <strong class="d-block mb-1">{{ membership.user.get_full_name }}</strong>
+                                                        <div class="mb-2">
+                                                            <span class="badge bg-primary me-1">{{ membership.committee.name }}</span>
+                                                            <span class="badge bg-secondary me-1">{{ membership.get_member_type_display }}</span>
+                                                            {% if membership.user.profile.department %}
+                                                                <span class="badge bg-light text-dark">{{ membership.user.profile.department }}</span>
+                                                            {% endif %}
+                                                        </div>
+                                                        <small class="text-muted d-block">
+                                                            <i class="bi bi-person-badge"></i> {{ membership.role.name|default:"Ohne Rolle" }} |
+                                                            <i class="bi bi-calendar-check"></i> seit {{ membership.start_date|date:"d.m.Y" }}
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        </li>
+                                        {% if not forloop.last %}<li><hr class="dropdown-divider"></li>{% endif %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+
+                            <div id="selectedParticipantCard" class="card mt-3 border-primary" style="display: none;">
+                                <div class="card-header bg-primary text-white">
+                                    <i class="bi bi-check-circle-fill"></i> Ausgewählter Teilnehmer
+                                </div>
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3">
+                                        <strong id="selectedParticipantName"></strong>
+                                        <span id="selectedParticipantDepartment" class="badge bg-secondary ms-2" style="display: none;"></span>
+                                    </h5>
+                                    <div class="row">
+                                        <div class="col-md-4 mb-2">
+                                            <small class="text-muted d-block"><i class="bi bi-building"></i> Gremium/Ausschuss</small>
+                                            <strong id="selectedParticipantCommittee"></strong>
+                                        </div>
+                                        <div class="col-md-4 mb-2">
+                                            <small class="text-muted d-block"><i class="bi bi-person-badge"></i> Rolle</small>
+                                            <strong id="selectedParticipantRole"></strong>
+                                        </div>
+                                        <div class="col-md-4 mb-2">
+                                            <small class="text-muted d-block"><i class="bi bi-tag"></i> Mitgliedschaft</small>
+                                            <strong id="selectedParticipantType"></strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Es gibt keine weiteren aktiven Mitgliedschaften im zulässigen Gremienkreis, die noch nicht Teilnehmer dieser Sitzung sind.
+                        </div>
+                    {% endif %}
+
+                    {% if form.membership.errors %}
+                        <div class="alert alert-danger">{{ form.membership.errors }}</div>
+                    {% endif %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary" {% if not candidate_memberships %}disabled{% endif %}>
+                            <i class="bi bi-person-plus"></i> Teilnehmer hinzufügen
+                        </button>
+                        <a href="{% url 'meetings:meeting_detail' meeting.pk %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Abbrechen
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const membershipInput = document.getElementById('{{ form.membership.id_for_label }}');
+    const selectedText = document.getElementById('selectedParticipantText');
+    const selectedCard = document.getElementById('selectedParticipantCard');
+
+    document.querySelectorAll('.participant-option').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const id = this.getAttribute('data-id');
+            const name = this.getAttribute('data-name');
+            const department = this.getAttribute('data-department');
+            const role = this.getAttribute('data-role');
+            const committee = this.getAttribute('data-committee');
+            const memberType = this.getAttribute('data-member-type');
+
+            membershipInput.value = id;
+            selectedText.textContent = name;
+            document.getElementById('selectedParticipantName').textContent = name;
+            document.getElementById('selectedParticipantRole').textContent = role;
+            document.getElementById('selectedParticipantCommittee').textContent = committee;
+            document.getElementById('selectedParticipantType').textContent = memberType;
+
+            const departmentBadge = document.getElementById('selectedParticipantDepartment');
+            if (department) {
+                departmentBadge.textContent = department;
+                departmentBadge.style.display = 'inline-block';
+            } else {
+                departmentBadge.style.display = 'none';
+            }
+
+            selectedCard.style.display = 'block';
+            document.querySelectorAll('.participant-option').forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+});
+</script>
+
+<style>
+.participant-option {
+    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.participant-option:hover {
+    background-color: #f8f9fa;
+    border-left-color: #0d6efd;
+}
+
+.participant-option.active {
+    background-color: #e7f1ff;
+    border-left-color: #0d6efd;
+}
+</style>
+{% endblock %}

@@ -353,22 +353,25 @@
     <script src="{% static 'agendas/js/agenda_reorder.js' %}"></script>
 {% endif %}
 
-<!-- Anwesenheit (Placeholder) -->
+<!-- Teilnehmer -->
 <div class="row mb-4">
     <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i class="bi bi-people"></i> Anwesenheit
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info mb-0">
-                    <i class="bi bi-info-circle"></i> 
-                    Anwesenheitsliste wird mit der Attendance-App hinzugefügt.
+        {% if user_can_view_participants %}
+            {% include 'participants/includes/participant_list.html' %}
+        {% else %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-people"></i> Teilnehmer
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-secondary mb-0">
+                        <i class="bi bi-lock"></i> Keine Berechtigung zur Anzeige der Teilnehmerliste.
+                    </div>
                 </div>
             </div>
-        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

@@ -1,0 +1,104 @@
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-people"></i> Teilnehmer
+        </h5>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary">{{ participants|length }}</span>
+            {% if user_can_edit_participants %}
+                <a href="{% url 'participants:participant_add' meeting.pk %}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-person-plus"></i> Teilnehmer hinzufügen
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body p-0">
+        {% if participants %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Rolle / Funktion</th>
+                            <th>Status</th>
+                            <th>Art</th>
+                            <th>Benachrichtigung</th>
+                            <th class="text-end">Aktionen</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for participant in participants %}
+                            <tr>
+                                <td>
+                                    <strong>{{ participant.display_name_for_display }}</strong>
+                                    {% if participant.substitute_membership %}
+                                        <br><small class="text-muted">Nachgeladen: {{ participant.substitute_name_for_display }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info text-dark">
+                                        {{ participant.role_for_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if participant.status == 'CANCELLED' %}danger{% elif participant.status == 'ABSENT' or participant.status == 'SUBSTITUTE_PROPOSED' %}warning{% else %}secondary{% endif %}">
+                                        {{ participant.get_status_display }}
+                                    </span>
+                                    {% if participant.status == 'ABSENT' and participant.substitute_membership %}
+                                        <div class="small mt-1">
+                                            <i class="bi bi-arrow-right"></i>
+                                            {{ participant.substitute_name_for_display }}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ participant.get_participant_type_display }}
+                                </td>
+                                <td>
+                                    {% if participant.last_notified_at %}
+                                        {{ participant.last_notified_at|date:"d.m.Y H:i" }}
+                                    {% else %}
+                                        <span class="text-muted">Noch nicht versendet</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        {% if user_can_mark_participant_absent and participant.status != 'CANCELLED' %}
+                                            <a href="{% url 'participants:participant_mark_absent' participant.pk %}" class="btn btn-outline-warning" title="Abwesenheit bearbeiten">
+                                                <i class="bi bi-person-x"></i>
+                                            </a>
+                                        {% endif %}
+                                        {% if user_can_manage_participant_substitutes and participant.substitute_membership %}
+                                            <form method="post" action="{% url 'participants:participant_remove_substitute' participant.pk %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-outline-danger" title="Ersatzmitglied entfernen">
+                                                    <i class="bi bi-person-dash"></i>
+                                                </button>
+                                            </form>
+                                        {% endif %}
+                                        {% if user_can_mark_participant_absent and not participant.substitute_membership %}
+                                            {% if participant.status == 'ABSENT' or participant.status == 'SUBSTITUTE_PROPOSED' %}
+                                                <form method="post" action="{% url 'participants:participant_remove_absence' participant.pk %}" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-outline-success" title="Abwesenheit entfernen">
+                                                        <i class="bi bi-person-check"></i>
+                                                    </button>
+                                                </form>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="p-3">
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle"></i> Für diese Sitzung wurden noch keine Teilnehmer angelegt.
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>

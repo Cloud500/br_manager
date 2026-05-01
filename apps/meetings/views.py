@@ -3,6 +3,7 @@
 from datetime import date
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -12,6 +13,9 @@ from django.http import JsonResponse
 from apps.meetings.forms import MeetingFilterForm, MeetingForm, MeetingSendInvitationForm
 from apps.meetings.mixins import MeetingCreatePermissionMixin, MeetingPermissionMixin
 from apps.meetings.models import Meeting
+from apps.participants.mixins import user_has_participant_permission
+from apps.participants.models import MeetingParticipant
+from apps.participants.services import send_meeting_invitations
 
 
 class MeetingListView(LoginRequiredMixin, ListView):
@@ -206,7 +210,47 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
         
         # TODO: Add attendance statistics when attendance app is implemented
         # context['attendees_count'] = self.object.attendance_records.filter(status='PRESENT').count()
-        
+        context['participants'] = self.object.participants.select_related(
+            'membership',
+            'membership__user',
+            'membership__role',
+            'membership__committee',
+            'substitute_membership',
+            'substitute_membership__user',
+            'substitute_membership__role',
+            'substitute_membership__committee',
+        ).order_by(
+            'membership__role__sort_order',
+            'membership__role__name',
+            'membership__user__last_name',
+            'membership__user__first_name',
+        )
+        context['user_can_view_participants'] = user_has_participant_permission(
+            self.request.user,
+            self.object,
+            'participant.view',
+        )
+        context['user_can_edit_participants'] = user_has_participant_permission(
+            self.request.user,
+            self.object,
+            'participant.edit',
+        )
+        context['user_can_mark_participant_absent'] = user_has_participant_permission(
+            self.request.user,
+            self.object,
+            'participant.mark_absent',
+        )
+        context['user_can_manage_participant_substitutes'] = user_has_participant_permission(
+            self.request.user,
+            self.object,
+            'participant.manage_substitutes',
+        )
+        context['user_can_send_participant_notifications'] = user_has_participant_permission(
+            self.request.user,
+            self.object,
+            'participant.send_notifications',
+        )
+
         return context
 
 
@@ -332,6 +376,8 @@ class MeetingSendInvitationView(LoginRequiredMixin, MeetingPermissionMixin, Form
     
     def dispatch(self, request, *args, **kwargs):
         """Check if invitation can be sent before displaying form."""
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
         meeting = self.get_meeting()
         if not meeting.can_send_invitation:
             messages.error(
@@ -339,22 +385,46 @@ class MeetingSendInvitationView(LoginRequiredMixin, MeetingPermissionMixin, Form
                 'Einladung kann nur für Entwürfe versendet werden.'
             )
             return redirect('meetings:meeting_detail', pk=meeting.pk)
+        if not user_has_participant_permission(
+            request.user,
+            meeting,
+            'participant.send_notifications',
+        ):
+            messages.error(
+                request,
+                'Sie haben keine Berechtigung zum Benachrichtigen der Teilnehmer.'
+            )
+            return redirect('meetings:meeting_detail', pk=meeting.pk)
         return super().dispatch(request, *args, **kwargs)
     
     def get_context_data(self, **kwargs):
         """Add meeting to context."""
         context = super().get_context_data(**kwargs)
-        context['meeting'] = self.get_meeting()
+        meeting = self.get_meeting()
+        context['meeting'] = meeting
+        context['invitation_participants'] = meeting.participants.filter(
+            Q(status__in=MeetingParticipant.ACTIVE_STATUSES)
+            | Q(
+                status=MeetingParticipant.STATUS_ABSENT,
+                nachladefaehig=True,
+                substitute_membership__isnull=False,
+            )
+        ).select_related(
+            'membership',
+            'membership__user',
+            'membership__role',
+            'membership__committee',
+            'substitute_membership',
+            'substitute_membership__user',
+        )
         return context
     
     def form_valid(self, form):
         """Send invitation and update meeting status."""
         meeting = self.get_meeting()
         
-        # TODO: Send email invitations when email functionality is implemented
-        # message = form.cleaned_data.get('message', '')
-        # include_agenda = form.cleaned_data.get('include_agenda', True)
-        # send_meeting_invitations(meeting, message, include_agenda)
+        message = form.cleaned_data.get('message', '')
+        sent_count = send_meeting_invitations(meeting, message)
         
         # Update meeting status
         meeting.status = 'SENT'
@@ -363,7 +433,7 @@ class MeetingSendInvitationView(LoginRequiredMixin, MeetingPermissionMixin, Form
         
         messages.success(
             self.request,
-            f'Einladung für "{meeting.title}" wurde versendet.'
+            f'Einladung für "{meeting.title}" wurde an {sent_count} Teilnehmer versendet.'
         )
         return redirect('meetings:meeting_detail', pk=meeting.pk)
 
