@@ -21,6 +21,7 @@ urlpatterns = [
     
     # Workflow actions
     path('<uuid:pk>/send-invitation/', views.MeetingSendInvitationView.as_view(), name='meeting_send_invitation'),
+    path('<uuid:pk>/reset-to-draft/', views.MeetingResetToDraftView.as_view(), name='meeting_reset_to_draft'),
     path('<uuid:pk>/start/', views.MeetingStartView.as_view(), name='meeting_start'),
     path('<uuid:pk>/complete/', views.MeetingCompleteView.as_view(), name='meeting_complete'),
 ]

@@ -250,6 +250,10 @@ class MeetingDetailView(LoginRequiredMixin, MeetingPermissionMixin, DetailView):
             self.object,
             'participant.send_notifications',
         )
+        context['user_can_reset_to_draft'] = (
+            self.object.status == 'SENT'
+            and (self.request.user.is_superuser or self.request.user.is_staff)
+        )
 
         return context
 
@@ -434,6 +438,44 @@ class MeetingSendInvitationView(LoginRequiredMixin, MeetingPermissionMixin, Form
         messages.success(
             self.request,
             f'Einladung für "{meeting.title}" wurde an {sent_count} Teilnehmer versendet.'
+        )
+        return redirect('meetings:meeting_detail', pk=meeting.pk)
+
+
+class MeetingResetToDraftView(LoginRequiredMixin, DetailView):
+    """View for administrators to reset a sent meeting to draft."""
+
+    model = Meeting
+
+    def get(self, request, *args, **kwargs):
+        """Redirect GET requests to the detail page."""
+        meeting = self.get_object()
+        return redirect('meetings:meeting_detail', pk=meeting.pk)
+
+    def post(self, request, *args, **kwargs):
+        """Reset SENT meetings to DRAFT for staff or superusers."""
+        meeting = self.get_object()
+
+        if not (request.user.is_superuser or request.user.is_staff):
+            messages.error(
+                request,
+                'Nur Administratoren können eine versendete Einladung zurücksetzen.'
+            )
+            return redirect('meetings:meeting_detail', pk=meeting.pk)
+
+        if meeting.status != 'SENT':
+            messages.error(
+                request,
+                'Nur Sitzungen mit versendeter Einladung können zurück auf Entwurf gesetzt werden.'
+            )
+            return redirect('meetings:meeting_detail', pk=meeting.pk)
+
+        meeting.status = 'DRAFT'
+        meeting.save(update_fields=['status', 'updated_at'])
+
+        messages.success(
+            request,
+            f'Sitzung "{meeting.title}" wurde auf Entwurf zurückgesetzt.'
         )
         return redirect('meetings:meeting_detail', pk=meeting.pk)
 

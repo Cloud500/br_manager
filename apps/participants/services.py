@@ -119,7 +119,7 @@ def add_participant(
             changed_by=changed_by,
         )
 
-    if meeting.sent_at and participant.is_active_for_invitation:
+    if _meeting_invitations_are_active(meeting) and participant.is_active_for_invitation:
         send_agenda_mail(participant)
 
     return participant
@@ -506,7 +506,7 @@ def remove_absence(
         note="Abwesenheit wurde entfernt.",
         changed_by=changed_by,
     )
-    if participant.meeting.sent_at:
+    if _meeting_invitations_are_active(participant.meeting):
         send_agenda_mail(participant)
 
 
@@ -534,7 +534,7 @@ def remove_substitute(
         "status",
         "updated_at",
     ])
-    if participant.meeting.sent_at:
+    if _meeting_invitations_are_active(participant.meeting):
         send_agenda_mail(participant)
 
 
@@ -604,7 +604,7 @@ def confirm_substitute(
         changed_by=changed_by,
     )
 
-    if participant.meeting.sent_at and not unchanged_replacement:
+    if _meeting_invitations_are_active(participant.meeting) and not unchanged_replacement:
         send_agenda_mail(participant)
 
     return substitute_membership
@@ -713,6 +713,11 @@ def _agenda_message(participant: MeetingParticipant, message: str) -> str:
         f"{extra_message}\n\n"
         "Mit freundlichen Grüßen\nBR-Manager"
     )
+
+
+def _meeting_invitations_are_active(meeting: Meeting) -> bool:
+    """Return whether participant changes should trigger invitation emails."""
+    return bool(meeting.sent_at and meeting.status != 'DRAFT')
 
 
 def _substitute_note(substitute: Membership | None) -> str:

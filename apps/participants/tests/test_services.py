@@ -220,8 +220,9 @@ class ParticipantsTestCase(TestCase):
             self.assertEqual(participant.role_for_display, self.role_viewer.name)
 
     def test_add_external_membership_participant_sends_mail_after_meeting_sent(self):
+        self.meeting.status = "SENT"
         self.meeting.sent_at = timezone.now()
-        self.meeting.save(update_fields=["sent_at"])
+        self.meeting.save(update_fields=["status", "sent_at", "updated_at"])
         other_committee = Committee.objects.create(
             name="Externe Stelle",
             committee_type="SUBCOMMITTEE",
@@ -343,8 +344,9 @@ class ParticipantsTestCase(TestCase):
         participant = self.meeting.participants.get(membership=self.regular_membership)
         mark_absent(participant, "krank", True, changed_by=self.helper)
         participant.refresh_from_db()
+        self.meeting.status = "SENT"
         self.meeting.sent_at = timezone.now()
-        self.meeting.save(update_fields=["sent_at"])
+        self.meeting.save(update_fields=["status", "sent_at", "updated_at"])
 
         replacement1 = confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
         replacement2 = confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
@@ -429,8 +431,9 @@ class ParticipantsTestCase(TestCase):
 
     def test_remove_substitute_restores_original_with_invitation_only(self):
         participant = self.meeting.participants.get(membership=self.regular_membership)
+        self.meeting.status = "SENT"
         self.meeting.sent_at = timezone.now()
-        self.meeting.save(update_fields=["sent_at"])
+        self.meeting.save(update_fields=["status", "sent_at", "updated_at"])
         mark_absent(
             participant,
             "krank",
@@ -456,8 +459,9 @@ class ParticipantsTestCase(TestCase):
 
     def test_remove_absence_restores_original_with_invitation_when_sent(self):
         participant = self.meeting.participants.get(membership=self.regular_membership)
+        self.meeting.status = "SENT"
         self.meeting.sent_at = timezone.now()
-        self.meeting.save(update_fields=["sent_at"])
+        self.meeting.save(update_fields=["status", "sent_at", "updated_at"])
         mark_absent(participant, "krank", False, changed_by=self.helper)
         participant.refresh_from_db()
         self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
@@ -503,8 +507,9 @@ class ParticipantsTestCase(TestCase):
 
     def test_mark_absent_edit_keeps_existing_replacement_without_duplicate_mails(self):
         participant = self.meeting.participants.get(membership=self.regular_membership)
+        self.meeting.status = "SENT"
         self.meeting.sent_at = timezone.now()
-        self.meeting.save(update_fields=["sent_at"])
+        self.meeting.save(update_fields=["status", "sent_at", "updated_at"])
 
         mark_absent(
             participant,
@@ -604,6 +609,30 @@ class ParticipantsTestCase(TestCase):
         self.assertIsNotNone(participant.invite_sent_at)
         self.assertIsNotNone(participant.last_notified_at)
         self.assertEqual(participant.status, MeetingParticipant.STATUS_INVITED)
+
+    def test_draft_meeting_with_preserved_sent_timestamp_does_not_auto_send_invitation(self):
+        self.meeting.status = "DRAFT"
+        self.meeting.sent_at = timezone.now()
+        self.meeting.save(update_fields=["status", "sent_at", "updated_at"])
+        added_user = User.objects.create_user(
+            email="added-draft@example.com",
+            password="testpass123",
+            first_name="Added",
+            last_name="Draft",
+            gender="F",
+        )
+        added_membership = Membership.objects.create(
+            user=added_user,
+            committee=self.committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+        )
+
+        add_participant(self.meeting, added_membership, changed_by=self.helper)
+
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_absent_and_substitute_proposed_participants_do_not_receive_invitation(self):
         regular = self.meeting.participants.get(membership=self.regular_membership)

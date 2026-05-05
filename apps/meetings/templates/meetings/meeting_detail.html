@@ -59,6 +59,15 @@
                 </form>
             {% endif %}
             
+            {% if user_can_reset_to_draft %}
+                <form method="post" action="{% url 'meetings:meeting_reset_to_draft' meeting.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-counterclockwise"></i> Zurück zu Entwurf
+                    </button>
+                </form>
+            {% endif %}
+            
             {% if meeting.can_complete %}
                 <form method="post" action="{% url 'meetings:meeting_complete' meeting.pk %}" class="d-inline">
                     {% csrf_token %}

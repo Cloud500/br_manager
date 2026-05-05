@@ -3,7 +3,6 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.shortcuts import redirect
-from django.urls import reverse
 
 
 class MeetingPermissionMixin(UserPassesTestMixin):
@@ -25,8 +24,14 @@ class MeetingPermissionMixin(UserPassesTestMixin):
         # Permission mapping
         permission_map = {
             'view': Meeting.user_can_view_meeting,
-            'edit': lambda u, m: m.is_editable,
-            'delete': lambda u, m: m.is_deletable,
+            'edit': lambda u, m: (
+                m.is_editable
+                and Meeting._user_has_permission(u, m.committee, 'meeting.edit')
+            ),
+            'delete': lambda u, m: (
+                m.is_deletable
+                and Meeting._user_has_permission(u, m.committee, 'meeting.delete_draft')
+            ),
             'send_invitation': Meeting.user_can_send_invitation,
             'start': Meeting.user_can_start_meeting,
             'complete': Meeting.user_can_complete_meeting,
