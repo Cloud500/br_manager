@@ -12,9 +12,9 @@ class PermissionModelTest(TestCase):
     def setUp(self):
         """Set up test data."""
         self.permission_data = {
-            'codename': 'meeting.create',
-            'name': 'Sitzung erstellen',
-            'category': 'meeting',
+            'codename': 'test.meeting_create',
+            'name': 'Test-Sitzung erstellen',
+            'category': 'test',
             'description': 'Erlaubt das Erstellen neuer Sitzungen'
         }
     
@@ -22,9 +22,9 @@ class PermissionModelTest(TestCase):
         """Test permission is created correctly with all fields."""
         perm = Permission.objects.create(**self.permission_data)
         
-        self.assertEqual(perm.codename, 'meeting.create')
-        self.assertEqual(perm.name, 'Sitzung erstellen')
-        self.assertEqual(perm.category, 'meeting')
+        self.assertEqual(perm.codename, 'test.meeting_create')
+        self.assertEqual(perm.name, 'Test-Sitzung erstellen')
+        self.assertEqual(perm.category, 'test')
         self.assertEqual(perm.description, 'Erlaubt das Erstellen neuer Sitzungen')
     
     def test_permission_codename_unique(self):
@@ -37,7 +37,7 @@ class PermissionModelTest(TestCase):
     def test_permission_str_representation(self):
         """Test __str__ method returns correct format."""
         perm = Permission.objects.create(**self.permission_data)
-        expected = 'meeting: Sitzung erstellen (meeting.create)'
+        expected = 'test: Test-Sitzung erstellen (test.meeting_create)'
         
         self.assertEqual(str(perm), expected)
 
@@ -48,8 +48,8 @@ class RoleModelTest(TestCase):
     def setUp(self):
         """Set up test data."""
         self.role_data = {
-            'name': 'Vorsitz',
-            'codename': 'CHAIR',
+            'name': 'Test-Vorsitz',
+            'codename': 'TEST_CHAIR',
             'role_type': 'COMMITTEE',
             'description': 'Vorsitzender des Gremiums',
             'is_system_role': True
@@ -59,8 +59,8 @@ class RoleModelTest(TestCase):
         """Test role is created correctly with all fields."""
         role = Role.objects.create(**self.role_data)
         
-        self.assertEqual(role.name, 'Vorsitz')
-        self.assertEqual(role.codename, 'CHAIR')
+        self.assertEqual(role.name, 'Test-Vorsitz')
+        self.assertEqual(role.codename, 'TEST_CHAIR')
         self.assertEqual(role.role_type, 'COMMITTEE')
         self.assertTrue(role.is_system_role)
     
@@ -76,14 +76,14 @@ class RoleModelTest(TestCase):
         role = Role.objects.create(**self.role_data)
         
         perm1 = Permission.objects.create(
-            codename='meeting.create',
-            name='Sitzung erstellen',
-            category='meeting'
+            codename='test.meeting_create_primary',
+            name='Test-Sitzung erstellen',
+            category='test'
         )
         perm2 = Permission.objects.create(
-            codename='meeting.edit',
-            name='Sitzung bearbeiten',
-            category='meeting'
+            codename='test.meeting_edit_primary',
+            name='Test-Sitzung bearbeiten',
+            category='test'
         )
         
         RolePermission.objects.create(role=role, permission=perm1)
@@ -96,7 +96,7 @@ class RoleModelTest(TestCase):
     def test_role_str_representation(self):
         """Test __str__ method returns correct format."""
         role = Role.objects.create(**self.role_data)
-        expected = 'Vorsitz (CHAIR)'
+        expected = 'Test-Vorsitz (TEST_CHAIR)'
         
         self.assertEqual(str(role), expected)
     
@@ -119,14 +119,14 @@ class RolePermissionModelTest(TestCase):
     def setUp(self):
         """Set up test data."""
         self.role = Role.objects.create(
-            name='Vorsitz',
-            codename='CHAIR',
+            name='Test-Vorsitz',
+            codename='TEST_CHAIR',
             role_type='COMMITTEE'
         )
         self.permission = Permission.objects.create(
-            codename='meeting.create',
-            name='Sitzung erstellen',
-            category='meeting'
+            codename='test.meeting_create',
+            name='Test-Sitzung erstellen',
+            category='test'
         )
     
     def test_role_permission_creation(self):
@@ -159,7 +159,7 @@ class RolePermissionModelTest(TestCase):
             role=self.role,
             permission=self.permission
         )
-        expected = 'CHAIR → meeting.create'
+        expected = 'TEST_CHAIR → test.meeting_create'
         
         self.assertEqual(str(rp), expected)
     
@@ -170,9 +170,16 @@ class RolePermissionModelTest(TestCase):
             permission=self.permission
         )
         
-        self.assertEqual(RolePermission.objects.count(), 1)
+        self.assertTrue(
+            RolePermission.objects.filter(
+                role=self.role,
+                permission=self.permission
+            ).exists()
+        )
         self.role.delete()
-        self.assertEqual(RolePermission.objects.count(), 0)
+        self.assertFalse(
+            RolePermission.objects.filter(permission=self.permission).exists()
+        )
     
     def test_cascade_delete_permission(self):
         """Test that deleting permission deletes RolePermission."""
@@ -181,6 +188,13 @@ class RolePermissionModelTest(TestCase):
             permission=self.permission
         )
         
-        self.assertEqual(RolePermission.objects.count(), 1)
+        self.assertTrue(
+            RolePermission.objects.filter(
+                role=self.role,
+                permission=self.permission
+            ).exists()
+        )
         self.permission.delete()
-        self.assertEqual(RolePermission.objects.count(), 0)
+        self.assertFalse(
+            RolePermission.objects.filter(role=self.role).exists()
+        )

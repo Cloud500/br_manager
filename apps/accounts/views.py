@@ -21,6 +21,8 @@ from django.views.generic import CreateView, DeleteView, FormView, ListView, Tem
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
 
+from apps.email_templates.models import EmailTemplate, RenderedEmail
+
 from .forms import UserInviteForm, UserRegistrationForm, UserUpdateForm
 from .models import UserInvitation, UserProfile
 from .twofa_utils import (
@@ -580,46 +582,29 @@ def generate_invitation_email_content(
     Returns:
         Tuple of (plain_text_content, html_content)
     """
-    # Plain text version for email clients that don't support HTML
-    text_content = f'''Hallo,
+    rendered = generate_invitation_email(
+        invite_url=invite_url,
+        inviter_name=inviter_name,
+        recipient_email="",
+        validity_days=validity_days,
+    )
+    return rendered.body_text, rendered.body_html
 
-Sie wurden von {inviter_name} zum BR-Manager eingeladen.
 
-Bitte klicken Sie auf den folgenden Link, um Ihr Konto einzurichten:
-
-{invite_url}
-
-Dieser Link ist {validity_days} Tage gültig.
-
-Mit freundlichen Grüßen
-Ihr BR-Manager Team
-'''
-    
-    # HTML version for modern email clients
-    html_content = f'''<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-<div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px;">
-<h2 style="color: #212529; margin-top: 0;">Einladung zum BR-Manager</h2>
-<p>Hallo,</p>
-<p>Sie wurden von <strong>{inviter_name}</strong> zum BR-Manager eingeladen.</p>
-<p>Bitte klicken Sie auf den folgenden Button, um Ihr Konto einzurichten:</p>
-<div style="text-align: center; margin: 30px 0;">
-<a href="{invite_url}" style="background-color: #0d6efd; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Konto einrichten</a>
-</div>
-<p style="font-size: 14px; color: #6c757d;">Oder kopieren Sie diesen Link in Ihren Browser:<br><a href="{invite_url}" style="color: #0d6efd; word-break: break-all;">{invite_url}</a></p>
-<p style="font-size: 14px; color: #6c757d;"><strong>Hinweis:</strong> Dieser Link ist {validity_days} Tage gültig.</p>
-<hr style="border: none; border-top: 1px solid #dee2e6; margin: 20px 0;">
-<p style="font-size: 14px; color: #6c757d; margin-bottom: 0;">Mit freundlichen Grüßen<br>Ihr BR-Manager Team</p>
-</div>
-</body>
-</html>'''
-    
-    return text_content, html_content
+def generate_invitation_email(
+    invite_url: str,
+    inviter_name: str,
+    recipient_email: str,
+    validity_days: int,
+) -> RenderedEmail:
+    """Render the configured user invitation e-mail template."""
+    template = EmailTemplate.get_default(EmailTemplate.USER_INVITATION)
+    return template.render({
+        "invite_url": invite_url,
+        "inviter_name": inviter_name,
+        "recipient_email": recipient_email,
+        "validity_days": validity_days,
+    })
 
 
 # -----------------------------------------------------------------------------
@@ -674,20 +659,22 @@ class UserInviteView(LoginRequiredMixin, AdminRequiredMixin, CreateView):
         inviter_name = self.request.user.get_full_name() or self.request.user.email
         
         # Generate email content
-        text_content, html_content = generate_invitation_email_content(
+        rendered_email = generate_invitation_email(
             invite_url=invite_url,
             inviter_name=inviter_name,
-            validity_days=UserInvitation.VALIDITY_DAYS
+            recipient_email=email,
+            validity_days=UserInvitation.VALIDITY_DAYS,
         )
         
         # Send multipart email (plain text + HTML)
         msg = EmailMultiAlternatives(
-            subject='Einladung zum BR-Manager',
-            body=text_content,
+            subject=rendered_email.subject,
+            body=rendered_email.body_text,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[email],
         )
-        msg.attach_alternative(html_content, "text/html")
+        if rendered_email.body_html:
+            msg.attach_alternative(rendered_email.body_html, "text/html")
         msg.send(fail_silently=False)
         
         # Show success message

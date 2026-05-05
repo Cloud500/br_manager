@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.db.models import Max, Q
 from django.db.models import QuerySet
 from django.utils import timezone
 
 from apps.committees.models import Membership
+from apps.email_templates.models import EmailTemplate, RenderedEmail
 from apps.meetings.models import Meeting
 from apps.participants.models import MeetingParticipant
 
@@ -671,14 +672,16 @@ def _notify_previous_substitute_removed(
 
 def send_agenda_mail(participant: MeetingParticipant, message: str = "") -> None:
     """Send agenda invitation mail to one participant."""
-    meeting = participant.meeting
-    send_mail(
-        subject=f"Einladung: {meeting.title} - {meeting.date:%d.%m.%Y}",
-        message=_agenda_message(participant, message),
+    rendered_email = _agenda_email(participant, message)
+    email = EmailMultiAlternatives(
+        subject=rendered_email.subject,
+        body=rendered_email.body_text,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[_delivery_email(participant)],
-        fail_silently=False,
+        to=[_delivery_email(participant)],
     )
+    if rendered_email.body_html:
+        email.attach_alternative(rendered_email.body_html, "text/html")
+    email.send(fail_silently=False)
     now = timezone.now()
     replacement_delivery = bool(
         participant.status == MeetingParticipant.STATUS_ABSENT
@@ -699,22 +702,34 @@ def send_agenda_mail(participant: MeetingParticipant, message: str = "") -> None
     )
 
 
+def _agenda_email(participant: MeetingParticipant, message: str) -> RenderedEmail:
+    """Render the configured agenda invitation e-mail."""
+    meeting = participant.meeting
+    template = EmailTemplate.get_default(EmailTemplate.MEETING_INVITATION)
+    return template.render({
+        "additional_message_block": _additional_message_block(message),
+        "agenda_text": _formatted_agenda_text(participant),
+        "committee_name": meeting.committee.name,
+        "meeting_date": f"{meeting.date:%d.%m.%Y}",
+        "meeting_location": meeting.get_full_location,
+        "meeting_start_time": f"{meeting.start_time:%H:%M}",
+        "meeting_title": meeting.title,
+        "message": message,
+        "recipient_email": _delivery_email(participant),
+        "recipient_name": _delivery_name(participant),
+    })
+
+
+def _additional_message_block(message: str) -> str:
+    """Return the optional additional message block."""
+    if not message:
+        return ""
+    return f"\n\nZusätzliche Nachricht:\n{message}"
+
+
 def _agenda_message(participant: MeetingParticipant, message: str) -> str:
     """Build agenda invitation text."""
-    meeting = participant.meeting
-    extra_message = f"\n\nZusätzliche Nachricht:\n{message}" if message else ""
-    agenda_text = _formatted_agenda_text(participant)
-    return (
-        f"Sehr geehrte/r {_delivery_name(participant)},\n\n"
-        f"hiermit laden wir Sie zur Sitzung des {meeting.committee.name} ein.\n\n"
-        f"Titel: {meeting.title}\n"
-        f"Datum: {meeting.date:%d.%m.%Y}\n"
-        f"Uhrzeit: {meeting.start_time:%H:%M} Uhr\n"
-        f"Ort: {meeting.get_full_location}"
-        f"{agenda_text}"
-        f"{extra_message}\n\n"
-        "Mit freundlichen Grüßen\nBR-Manager"
-    )
+    return _agenda_email(participant, message).body_text
 
 
 def _formatted_agenda_text(participant: MeetingParticipant) -> str:

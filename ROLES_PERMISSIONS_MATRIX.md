@@ -125,6 +125,14 @@ Verwendet als Basis für die Anpassung der Migrations-Dateien in `apps/*/migrati
 
 ---
 
+## APP: EMAIL_TEMPLATES (E-Mail-Vorlagen)
+
+| Permission                  | Codename            | SYSTEM_ADMIN | USER | CHAIR | VICE_CHAIR | CLERK | MEMBER | SUBSTITUTE | EXTERNAL_MEMBER | GUEST |
+|-----------------------------|---------------------|--------------|------|-------|------------|-------|--------|------------|-----------------|-------|
+| E-Mail-Vorlagen bearbeiten | email_template.edit | ✓            | ✗    | ✓     | ✓          | ✗     | ✗      | ✗          | ✗               | ✗     |
+
+---
+
 ## APP: AGENDAS (Tagesordnungs-Verwaltung)
 
 | Permission                 | Codename                     | SYSTEM_ADMIN | USER | CHAIR | VICE_CHAIR | CLERK | MEMBER | SUBSTITUTE | EXTERNAL_MEMBER | GUEST |

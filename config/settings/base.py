@@ -44,6 +44,7 @@ LOCAL_APPS = [
     "apps.agendas",
     "apps.elections",
     "apps.resolutions",
+    "apps.email_templates",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

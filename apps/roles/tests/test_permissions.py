@@ -47,15 +47,15 @@ class SeedRolesCommandTest(TestCase):
         # Should have same count
         self.assertEqual(first_count, second_count)
     
-    def test_system_admin_has_all_system_permissions(self):
-        """Test that SYSTEM_ADMIN role has all system permissions."""
+    def test_system_admin_has_all_permissions(self):
+        """Test that SYSTEM_ADMIN role has all permissions."""
         call_command('seed_roles', stdout=StringIO())
         
         system_admin = Role.objects.get(codename='SYSTEM_ADMIN')
-        system_perms = Permission.objects.filter(category='system')
+        permissions = Permission.objects.all()
         
-        # Check that SYSTEM_ADMIN has all system permissions
-        for perm in system_perms:
+        # Check that SYSTEM_ADMIN has all permissions
+        for perm in permissions:
             self.assertTrue(
                 RolePermission.objects.filter(
                     role=system_admin,
@@ -64,10 +64,9 @@ class SeedRolesCommandTest(TestCase):
                 f'SYSTEM_ADMIN should have permission {perm.codename}'
             )
         
-        # Check count
         self.assertEqual(
             system_admin.permissions.count(),
-            system_perms.count()
+            permissions.count()
         )
     
     def test_system_roles_marked_correctly(self):
@@ -95,3 +94,34 @@ class SeedRolesCommandTest(TestCase):
             role = Role.objects.get(codename=codename)
             self.assertEqual(role.role_type, 'COMMITTEE')
             self.assertTrue(role.is_system_role)
+
+    def test_seed_roles_assigns_email_template_edit_permission(self):
+        """Test default roles for editing e-mail templates."""
+        call_command('seed_roles', stdout=StringIO())
+
+        permission = Permission.objects.get(codename='email_template.edit')
+        allowed_roles = ['SYSTEM_ADMIN', 'CHAIR', 'VICE_CHAIR']
+        denied_roles = [
+            'USER', 'CLERK', 'MEMBER', 'SUBSTITUTE',
+            'EXTERNAL_MEMBER', 'GUEST'
+        ]
+
+        for codename in allowed_roles:
+            role = Role.objects.get(codename=codename)
+            self.assertTrue(
+                RolePermission.objects.filter(
+                    role=role,
+                    permission=permission
+                ).exists(),
+                f'{codename} should have email_template.edit'
+            )
+
+        for codename in denied_roles:
+            role = Role.objects.get(codename=codename)
+            self.assertFalse(
+                RolePermission.objects.filter(
+                    role=role,
+                    permission=permission
+                ).exists(),
+                f'{codename} should not have email_template.edit'
+            )

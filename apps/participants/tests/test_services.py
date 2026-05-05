@@ -11,6 +11,7 @@ from django.utils import timezone
 from apps.accounts.models import User
 from apps.agendas.models import AgendaItem
 from apps.committees.models import Committee, Membership
+from apps.email_templates.models import EmailTemplate
 from apps.meetings.models import Meeting
 from apps.participants.models import MeetingParticipant
 from apps.participants.forms import AddParticipantForm
@@ -635,6 +636,25 @@ class ParticipantsTestCase(TestCase):
         self.assertIn("2. Beratung aktueller Themen", message.body)
         self.assertNotIn("TOP 1:", message.body)
         self.assertIn("Bitte pünktlich sein", message.body)
+
+    def test_send_meeting_invitations_uses_configured_email_template(self):
+        """Meeting invitations use the editable system template."""
+        template = EmailTemplate.get_default(EmailTemplate.MEETING_INVITATION)
+        template.subject = "BR-Termin: {{ meeting_title }}"
+        template.body_text = (
+            "Empfänger: {{ recipient_name }}\n"
+            "Gremium: {{ committee_name }}\n"
+            "Nachricht: {{ message }}"
+        )
+        template.save()
+
+        send_meeting_invitations(self.meeting, message="Bitte Unterlagen mitbringen")
+
+        self.assertGreater(len(mail.outbox), 0)
+        message = mail.outbox[0]
+        self.assertEqual(message.subject, "BR-Termin: Sitzung")
+        self.assertIn("Gremium: BR", message.body)
+        self.assertIn("Nachricht: Bitte Unterlagen mitbringen", message.body)
 
     def test_draft_meeting_with_preserved_sent_timestamp_does_not_auto_send_invitation(self):
         self.meeting.status = "DRAFT"

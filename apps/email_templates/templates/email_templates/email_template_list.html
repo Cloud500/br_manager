@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block title %}E-Mail-Vorlagen - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-8">
+        <h1><i class="bi bi-envelope-paper"></i> E-Mail-Vorlagen</h1>
+        <p class="text-muted mb-0">
+            Systemvorgegebene Vorlagen können hier angepasst werden. Neue Vorlagen werden nicht frei angelegt.
+        </p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Betreff</th>
+                        <th>Platzhalter</th>
+                        <th>Aktualisiert</th>
+                        <th>Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for template in email_templates %}
+                    <tr>
+                        <td>
+                            <strong>{{ template.name }}</strong>
+                            {% if template.description %}
+                                <br><small class="text-muted">{{ template.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td><code>{{ template.subject }}</code></td>
+                        <td>
+                            {% for placeholder in template.available_placeholders %}
+                                <code class="small">{% templatetag openvariable %} {{ placeholder }} {% templatetag closevariable %}</code>{% if not forloop.last %}<br>{% endif %}
+                            {% endfor %}
+                        </td>
+                        <td>{{ template.updated_at|date:"d.m.Y H:i" }}</td>
+                        <td>
+                            <a href="{% url 'email_templates:email_template_update' template.pk %}"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i> Bearbeiten
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            Keine E-Mail-Vorlagen gefunden.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

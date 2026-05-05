@@ -35,6 +35,15 @@ class Command(BaseCommand):
         ('GUEST', 'Gast',
          'Gast ohne Stimmrecht', 'COMMITTEE', 40),
     ]
+
+    EMAIL_TEMPLATE_PERMISSIONS = [
+        (
+            'email_template.edit',
+            'E-Mail-Vorlagen bearbeiten',
+            'Systemvorgegebene E-Mail-Vorlagen bearbeiten',
+            'email_template',
+        ),
+    ]
     
     def handle(self, *args, **options):
         """Execute command."""
@@ -103,6 +112,36 @@ class Command(BaseCommand):
                     self.stdout.write(
                         self.style.WARNING(f'* Updated committee role: {codename}')
                     )
+
+        # Create permissions owned by apps without a separate seed command.
+        self.stdout.write('\nCreating e-mail template permissions...')
+        for codename, name, description, category in self.EMAIL_TEMPLATE_PERMISSIONS:
+            permission, created = Permission.objects.get_or_create(
+                codename=codename,
+                defaults={
+                    'name': name,
+                    'description': description,
+                    'category': category,
+                }
+            )
+            if created:
+                created_count += 1
+                self.stdout.write(
+                    self.style.SUCCESS(f'+ Created permission: {codename}')
+                )
+            elif (
+                permission.name != name
+                or permission.description != description
+                or permission.category != category
+            ):
+                permission.name = name
+                permission.description = description
+                permission.category = category
+                permission.save()
+                updated_count += 1
+                self.stdout.write(
+                    self.style.WARNING(f'* Updated permission: {codename}')
+                )
         
         # Assign all system permissions to SYSTEM_ADMIN
         self.stdout.write('\nAssigning permissions to SYSTEM_ADMIN...')
@@ -175,7 +214,32 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.ERROR('! VICE_CHAIR role not found')
             )
-        
+
+        # CHAIR and VICE_CHAIR may edit system-provided e-mail templates.
+        self.stdout.write('\nAssigning e-mail template permissions...')
+        template_perms = Permission.objects.filter(category='email_template')
+        for role_codename in ['CHAIR', 'VICE_CHAIR']:
+            try:
+                role = Role.objects.get(codename=role_codename)
+                assigned_count = 0
+                for perm in template_perms:
+                    role_perm, created = RolePermission.objects.get_or_create(
+                        role=role,
+                        permission=perm
+                    )
+                    if created:
+                        assigned_count += 1
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f'+ Assigned {assigned_count} e-mail template permissions '
+                        f'to {role_codename}'
+                    )
+                )
+            except Role.DoesNotExist:
+                self.stdout.write(
+                    self.style.ERROR(f'! {role_codename} role not found')
+                )
+
         # CLERK gets view and view_members permissions
         try:
             clerk = Role.objects.get(codename='CLERK')
