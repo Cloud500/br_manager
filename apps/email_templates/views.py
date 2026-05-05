@@ -49,6 +49,12 @@ class EmailTemplateUpdateView(LoginRequiredMixin, EmailTemplatePermissionMixin, 
         EmailTemplate.ensure_defaults()
         return EmailTemplate.objects.filter(is_system_template=True)
 
+    def get_context_data(self, **kwargs):
+        """Add sample values for the rendered e-mail preview."""
+        context = super().get_context_data(**kwargs)
+        context["preview_context"] = self.object.get_preview_context()
+        return context
+
     def form_valid(self, form):
         """Show success message after saving."""
         messages.success(

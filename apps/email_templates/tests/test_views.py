@@ -134,4 +134,7 @@ class EmailTemplateViewTest(TestCase):
         self.assertContains(response, "data-rich-text-source")
         self.assertContains(response, "Formatierter Inhalt")
         self.assertContains(response, "Gerenderte Vorschau")
+        self.assertContains(response, "Fertiges Ergebnis")
+        self.assertContains(response, "email-template-preview-context")
+        self.assertContains(response, "data-editor-preview-subject")
         self.assertNotContains(response, "Text-Version der E-Mail")

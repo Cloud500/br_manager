@@ -89,8 +89,8 @@ class EmailTemplate(models.Model):
                 "Titel: {{ meeting_title }}\n"
                 "Datum: {{ meeting_date }}\n"
                 "Uhrzeit: {{ meeting_start_time }} Uhr\n"
-                "Ort: {{ meeting_location }}"
-                "{{ agenda_text }}"
+                "Ort: {{ meeting_location }}\n\n"
+                "{{ agenda_text }}\n\n"
                 "{{ additional_message_block }}\n\n"
                 "Mit freundlichen Grüßen\n"
                 "BR-Manager"
@@ -109,6 +109,50 @@ class EmailTemplate(models.Model):
                 "recipient_name",
             ],
             "sort_order": 20,
+        },
+    }
+
+    LEGACY_BODY_TEXTS = {
+        MEETING_INVITATION: (
+            "Sehr geehrte/r {{ recipient_name }},\n\n"
+            "hiermit laden wir Sie zur Sitzung des {{ committee_name }} ein.\n\n"
+            "Titel: {{ meeting_title }}\n"
+            "Datum: {{ meeting_date }}\n"
+            "Uhrzeit: {{ meeting_start_time }} Uhr\n"
+            "Ort: {{ meeting_location }}"
+            "{{ agenda_text }}"
+            "{{ additional_message_block }}\n\n"
+            "Mit freundlichen Grüßen\n"
+            "BR-Manager"
+        ),
+    }
+
+    PREVIEW_CONTEXTS = {
+        USER_INVITATION: {
+            "invite_url": "https://br-manager.example/registrieren/beispiel",
+            "inviter_name": "Max Mustermann",
+            "recipient_email": "mitglied@example.test",
+            "validity_days": "7",
+        },
+        MEETING_INVITATION: {
+            "additional_message_block": (
+                "Zusätzliche Nachricht:\n"
+                "Bitte Unterlagen zur Sitzung mitbringen."
+            ),
+            "agenda_text": (
+                "Tagesordnung:\n"
+                "TOP 1: Begrüßung\n"
+                "TOP 2: Aktuelle Themen\n"
+                "TOP 3: Beschlussfassung"
+            ),
+            "committee_name": "Betriebsrat",
+            "meeting_date": "15.05.2026",
+            "meeting_location": "Besprechungsraum 1",
+            "meeting_start_time": "10:00",
+            "meeting_title": "Monatssitzung",
+            "message": "Bitte Unterlagen zur Sitzung mitbringen.",
+            "recipient_email": "mitglied@example.test",
+            "recipient_name": "Erika Musterfrau",
         },
     }
 
@@ -191,6 +235,9 @@ class EmailTemplate(models.Model):
             if getattr(template, field) != defaults[field]:
                 setattr(template, field, defaults[field])
                 changed_fields.append(field)
+        if template.body_text == cls.LEGACY_BODY_TEXTS.get(key):
+            template.body_text = defaults["body_text"]
+            changed_fields.append("body_text")
         if changed_fields:
             template.save(update_fields=[*changed_fields, "updated_at"])
         return template
@@ -199,6 +246,13 @@ class EmailTemplate(models.Model):
     def ensure_defaults(cls) -> list["EmailTemplate"]:
         """Ensure all system templates exist."""
         return [cls.get_default(key) for key in cls.DEFAULTS]
+
+    def get_preview_context(self) -> dict[str, str]:
+        """Return sample values for rendering the edit-page preview."""
+        preview_context = dict(self.PREVIEW_CONTEXTS.get(self.key, {}))
+        for placeholder in self.available_placeholders or []:
+            preview_context.setdefault(placeholder, f"{{{{ {placeholder} }}}}")
+        return preview_context
 
     @staticmethod
     def extract_placeholders(content: str) -> set[str]:
@@ -260,7 +314,7 @@ class EmailTemplate(models.Model):
         def replace(match: re.Match) -> str:
             value = str(context[match.group(1)])
             if escape_html:
-                return str(conditional_escape(value))
+                return str(conditional_escape(value)).replace("\n", "<br>")
             return value
 
         return PLACEHOLDER_PATTERN.sub(replace, content)

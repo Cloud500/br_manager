@@ -12,6 +12,7 @@ from apps.email_templates.models import EmailTemplate
 
 ALLOWED_HTML_TAGS = {
     "a",
+    "b",
     "blockquote",
     "br",
     "div",

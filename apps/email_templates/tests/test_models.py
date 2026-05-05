@@ -39,6 +39,33 @@ class EmailTemplateModelTest(TestCase):
         self.assertIn("Tagesordnung:", rendered.body_text)
         self.assertIn("<p>Max Mustermann</p>", rendered.body_html)
 
+    def test_render_converts_placeholder_line_breaks_for_html_body(self):
+        """Placeholder values keep line breaks in rendered HTML emails."""
+        template = EmailTemplate.get_default(EmailTemplate.MEETING_INVITATION)
+        template.subject = "Einladung: {{ meeting_title }}"
+        template.body_text = "{{ agenda_text }}"
+        template.body_html = "<p>{{ agenda_text }}</p>"
+        template.save()
+
+        rendered = template.render({
+            "meeting_title": "Monatssitzung",
+            "agenda_text": "TOP 1: Begrüßung\nTOP 2: Beschluss",
+        })
+
+        self.assertEqual(rendered.body_text, "TOP 1: Begrüßung\nTOP 2: Beschluss")
+        self.assertIn("TOP 1: Begrüßung<br>TOP 2: Beschluss", rendered.body_html)
+
+    def test_preview_context_values_do_not_add_outer_blank_lines(self):
+        """Preview values let the template control spacing around placeholders."""
+        template = EmailTemplate.get_default(EmailTemplate.MEETING_INVITATION)
+        context = template.get_preview_context()
+
+        self.assertEqual(context["agenda_text"], context["agenda_text"].strip())
+        self.assertEqual(
+            context["additional_message_block"],
+            context["additional_message_block"].strip(),
+        )
+
     def test_clean_rejects_unknown_placeholders(self):
         """Templates may only use placeholders defined for their system key."""
         template = EmailTemplate.get_default(EmailTemplate.USER_INVITATION)

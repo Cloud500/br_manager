@@ -35,6 +35,24 @@ class EmailTemplateFormTest(TestCase):
         self.assertNotIn("script", saved.body_html)
         self.assertNotIn("javascript:", saved.body_html)
 
+    def test_inline_formatting_is_preserved_before_saving(self):
+        """Editor output for bold, italic and underline is preserved."""
+        template = EmailTemplate.get_default(EmailTemplate.USER_INVITATION)
+        form = EmailTemplateForm(
+            data={
+                "subject": "Einladung {{ recipient_email }}",
+                "body_html": "<p><b>Fett</b> <i>Kursiv</i> <u>Unterstrichen</u></p>",
+            },
+            instance=template,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+
+        self.assertIn("<b>Fett</b>", saved.body_html)
+        self.assertIn("<i>Kursiv</i>", saved.body_html)
+        self.assertIn("<u>Unterstrichen</u>", saved.body_html)
+
     def test_body_text_is_derived_from_formatted_body(self):
         """The plain-text fallback is generated from the single formatted field."""
         template = EmailTemplate.get_default(EmailTemplate.USER_INVITATION)
@@ -50,6 +68,22 @@ class EmailTemplateFormTest(TestCase):
         saved = form.save()
 
         self.assertEqual(saved.body_text, "Hallo\n\n{{ recipient_email }}\nWillkommen")
+
+    def test_body_text_preserves_shift_enter_line_breaks(self):
+        """Line breaks entered in the editor are kept for the text fallback."""
+        template = EmailTemplate.get_default(EmailTemplate.USER_INVITATION)
+        form = EmailTemplateForm(
+            data={
+                "subject": "Einladung {{ recipient_email }}",
+                "body_html": "<p>Zeile 1<br>Zeile 2<br><br>Zeile 4</p>",
+            },
+            instance=template,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+
+        self.assertEqual(saved.body_text, "Zeile 1\nZeile 2\n\nZeile 4")
 
     def test_form_initializes_formatted_body_from_text_fallback(self):
         """Existing text-only templates are shown in the formatted editor."""

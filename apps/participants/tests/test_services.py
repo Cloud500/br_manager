@@ -656,6 +656,31 @@ class ParticipantsTestCase(TestCase):
         self.assertIn("Gremium: BR", message.body)
         self.assertIn("Nachricht: Bitte Unterlagen mitbringen", message.body)
 
+    def test_meeting_invitation_context_values_do_not_add_outer_blank_lines(self):
+        """Editable templates control blank lines around agenda placeholders."""
+        AgendaItem.objects.create(
+            agenda=self.meeting.agenda,
+            title="Beschlussfassung",
+            sort_order=1,
+        )
+        template = EmailTemplate.get_default(EmailTemplate.MEETING_INVITATION)
+        template.subject = "BR-Termin: {{ meeting_title }}"
+        template.body_text = (
+            "Ort: {{ meeting_location }}\n\n"
+            "{{ agenda_text }}\n\n"
+            "XYZ\n\n"
+            "{{ additional_message_block }}"
+        )
+        template.save()
+
+        send_meeting_invitations(self.meeting, message="Bitte Unterlagen mitbringen")
+
+        message = mail.outbox[0]
+        self.assertIn(f"Ort: {self.meeting.get_full_location}\n\nTagesordnung:", message.body)
+        self.assertIn("1. Beschlussfassung\n\nXYZ\n\nZusätzliche Nachricht:", message.body)
+        self.assertNotIn(f"Ort: {self.meeting.get_full_location}\n\n\nTagesordnung:", message.body)
+        self.assertNotIn("XYZ\n\n\nZusätzliche Nachricht:", message.body)
+
     def test_draft_meeting_with_preserved_sent_timestamp_does_not_auto_send_invitation(self):
         self.meeting.status = "DRAFT"
         self.meeting.sent_at = timezone.now()

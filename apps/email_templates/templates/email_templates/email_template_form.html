@@ -17,8 +17,15 @@
     }
 
     .email-template-preview {
-        min-height: 18rem;
+        min-height: 12rem;
         overflow: auto;
+    }
+
+    .email-template-preview-frame {
+        background-color: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: .375rem;
+        padding: 1rem;
     }
 
     textarea[data-rich-text-source] {
@@ -95,26 +102,36 @@
                                             <i class="bi bi-link-45deg"></i> Link
                                         </button>
                                     </div>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" data-editor-preview-toggle>
-                                        Vorschau anzeigen
-                                    </button>
                                 </div>
                             </div>
                             <div class="card-body p-0">
                                 <div class="email-template-editor form-control border-0 rounded-0" contenteditable="true" data-editor-surface aria-label="HTML-Inhalt formatieren"></div>
-                                <div class="email-template-preview p-3 d-none" data-editor-preview>
-                                    <div class="small text-muted mb-2">Gerenderte Vorschau</div>
-                                    <div data-editor-preview-content></div>
-                                </div>
                             </div>
                         </div>
                         {{ form.body_html }}
                         <div class="form-text">
                             Bearbeiten Sie hier den formatierten E-Mail-Inhalt. Die Text-Version wird automatisch daraus erzeugt. Platzhalter wie
                             <code>{% templatetag openvariable %} recipient_name {% templatetag closevariable %}</code>
-                            können weiterhin eingefügt werden.
+                            können weiterhin eingefügt werden. <kbd>Shift</kbd> + <kbd>Enter</kbd> erzeugt einen einfachen Zeilenumbruch.
                         </div>
                         {{ form.body_html.errors }}
+                    </div>
+
+                    <div class="card mb-4" data-editor-preview>
+                        <div class="card-header bg-light">
+                            <strong>Fertiges Ergebnis</strong>
+                            <span class="text-muted">(gerenderte E-Mail-Vorschau)</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <div class="small text-muted">Betreff</div>
+                                <div class="fw-semibold" data-editor-preview-subject></div>
+                            </div>
+                            <div class="small text-muted mb-2">
+                                Gerenderte Vorschau mit Beispielwerten für die Platzhalter. Diese Darstellung entspricht der späteren HTML-Mail; die Text-Version wird weiterhin mitgesendet.
+                            </div>
+                            <div class="email-template-preview email-template-preview-frame" data-editor-preview-content></div>
+                        </div>
                     </div>
 
                     <div class="d-flex justify-content-between">
@@ -130,6 +147,7 @@
         </div>
     </div>
 </div>
+{{ preview_context|json_script:"email-template-preview-context" }}
 {% endblock %}
 
 {% block extra_js %}

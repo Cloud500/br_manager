@@ -724,7 +724,7 @@ def _additional_message_block(message: str) -> str:
     """Return the optional additional message block."""
     if not message:
         return ""
-    return f"\n\nZusätzliche Nachricht:\n{message}"
+    return f"Zusätzliche Nachricht:\n{message}"
 
 
 def _agenda_message(participant: MeetingParticipant, message: str) -> str:
@@ -738,7 +738,7 @@ def _formatted_agenda_text(participant: MeetingParticipant) -> str:
     if not meeting.has_agenda:
         return ""
 
-    agenda_lines = ["", "", "Tagesordnung:"]
+    agenda_lines = ["Tagesordnung:"]
     items = [
         item for item in meeting.agenda.all_items
         if _agenda_item_visible_to_participant(item, participant)
