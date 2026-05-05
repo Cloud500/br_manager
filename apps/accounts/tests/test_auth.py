@@ -1,6 +1,7 @@
 """Tests for Two-Factor Authentication."""
 
 import pyotp
+from django.contrib.messages import get_messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 from django.test import Client, TestCase
@@ -260,3 +261,47 @@ class TwoFactorViewsTest(TestCase):
         # Second request should not show codes (removed from session)
         response = self.client.get(reverse('accounts:2fa_recovery_codes'))
         self.assertIsNone(response.context['recovery_codes'])
+
+    def test_2fa_login_flow_authenticates_after_valid_totp(self):
+        """Test password login followed by TOTP verification."""
+        self.user.two_factor_enabled = True
+        self.user.two_factor_method = 'TOTP'
+        self.user.totp_secret = generate_totp_secret()
+        self.user.save()
+
+        response = self.client.post(reverse('accounts:login'), {
+            'username': 'test@example.com',
+            'password': 'TestPass123!',
+        })
+
+        self.assertRedirects(response, reverse('accounts:2fa_verify'))
+        self.assertEqual(self.client.session['2fa_user_id'], str(self.user.id))
+
+        valid_code = pyotp.TOTP(self.user.totp_secret).now()
+        response = self.client.post(reverse('accounts:2fa_verify'), {'code': valid_code})
+
+        self.assertRedirects(response, reverse('core:dashboard'))
+        response = self.client.get(reverse('core:dashboard'))
+        self.assertTrue(response.wsgi_request.user.is_authenticated)
+        self.assertTrue(self.client.session['2fa_verified'])
+        self.assertNotIn('2fa_user_id', self.client.session)
+
+    def test_2fa_verify_template_prevents_duplicate_submits(self):
+        """Test 2FA form guards against duplicate browser submissions."""
+        session = self.client.session
+        session['2fa_user_id'] = str(self.user.id)
+        session.save()
+
+        response = self.client.get(reverse('accounts:2fa_verify'))
+
+        self.assertContains(response, 'let isSubmitting = false;')
+        self.assertContains(response, 'verifyButton.disabled = true;')
+        self.assertContains(response, 'e.target.form.requestSubmit();')
+
+    def test_2fa_verify_without_login_session_redirects_to_login(self):
+        """Test expired 2FA sessions show the expected error."""
+        response = self.client.post(reverse('accounts:2fa_verify'), {'code': '123456'})
+
+        self.assertRedirects(response, reverse('accounts:login'))
+        messages = [message.message for message in get_messages(response.wsgi_request)]
+        self.assertIn('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', messages)

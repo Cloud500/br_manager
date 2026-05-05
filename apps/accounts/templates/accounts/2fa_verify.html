@@ -35,7 +35,7 @@
                     <input type="hidden" name="use_recovery" id="use_recovery" value="">
                     
                     <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary btn-lg">
+                        <button type="submit" class="btn btn-primary btn-lg" id="verifyButton">
                             <i class="bi bi-check-circle"></i> Verifizieren
                         </button>
                     </div>
@@ -61,6 +61,20 @@
 </div>
 
 <script>
+    const verifyForm = document.getElementById('verifyForm');
+    const verifyButton = document.getElementById('verifyButton');
+    let isSubmitting = false;
+
+    verifyForm.addEventListener('submit', function(e) {
+        if (isSubmitting) {
+            e.preventDefault();
+            return;
+        }
+
+        isSubmitting = true;
+        verifyButton.disabled = true;
+    });
+
     function useRecoveryCode() {
         const codeInput = document.getElementById('code');
         const useRecovery = document.getElementById('use_recovery');
@@ -77,10 +91,14 @@
     document.getElementById('code').addEventListener('input', function(e) {
         const useRecovery = document.getElementById('use_recovery').value;
         
-        if (!useRecovery && e.target.value.length === 6) {
+        if (!useRecovery && e.target.value.length === 6 && !isSubmitting) {
             setTimeout(() => {
-                if (e.target.value.length === 6) {
-                    e.target.form.submit();
+                if (e.target.value.length === 6 && !isSubmitting) {
+                    if (typeof e.target.form.requestSubmit === 'function') {
+                        e.target.form.requestSubmit();
+                    } else {
+                        verifyButton.click();
+                    }
                 }
             }, 300);
         }
