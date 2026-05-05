@@ -2,7 +2,6 @@
 
 from django import forms
 
-from apps.accounts.models import User
 from apps.meetings.models import Meeting
 
 
@@ -79,9 +78,7 @@ class MeetingForm(forms.ModelForm):
         self.committee_members = []
         self.chair_candidates = []
         self.clerk_candidates = []
-        committee_id = None
         if self.instance.pk and hasattr(self.instance, 'committee') and self.instance.committee_id:
-            committee_id = self.instance.committee_id
             try:
                 from apps.committees.models import Membership
                 from apps.roles.models import Permission
@@ -227,11 +224,4 @@ class MeetingSendInvitationForm(forms.Form):
         required=False,
         label='Zusätzliche Nachricht',
         help_text='Optional: Fügen Sie eine persönliche Nachricht zur Einladung hinzu'
-    )
-    include_agenda = forms.BooleanField(
-        initial=True,
-        required=False,
-        label='Tagesordnung anhängen',
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        help_text='Tagesordnung als PDF anhängen (falls vorhanden)'
     )

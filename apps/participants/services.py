@@ -703,6 +703,7 @@ def _agenda_message(participant: MeetingParticipant, message: str) -> str:
     """Build agenda invitation text."""
     meeting = participant.meeting
     extra_message = f"\n\nZusätzliche Nachricht:\n{message}" if message else ""
+    agenda_text = _formatted_agenda_text(participant)
     return (
         f"Sehr geehrte/r {_delivery_name(participant)},\n\n"
         f"hiermit laden wir Sie zur Sitzung des {meeting.committee.name} ein.\n\n"
@@ -710,14 +711,95 @@ def _agenda_message(participant: MeetingParticipant, message: str) -> str:
         f"Datum: {meeting.date:%d.%m.%Y}\n"
         f"Uhrzeit: {meeting.start_time:%H:%M} Uhr\n"
         f"Ort: {meeting.get_full_location}"
+        f"{agenda_text}"
         f"{extra_message}\n\n"
         "Mit freundlichen Grüßen\nBR-Manager"
     )
 
 
+def _formatted_agenda_text(participant: MeetingParticipant) -> str:
+    """Return the meeting agenda as preformatted plain text for e-mails."""
+    meeting = participant.meeting
+    if not meeting.has_agenda:
+        return ""
+
+    agenda_lines = ["", "", "Tagesordnung:"]
+    items = [
+        item for item in meeting.agenda.all_items
+        if _agenda_item_visible_to_participant(item, participant)
+    ]
+    if not items:
+        agenda_lines.append("Keine sichtbaren Tagesordnungspunkte erfasst.")
+        return "\n".join(agenda_lines)
+
+    for item in items:
+        agenda_lines.append(f"{item.item_number}. {item.title}")
+        if item.description:
+            for description_line in item.description.splitlines():
+                agenda_lines.append(f"   {description_line}")
+
+    return "\n".join(agenda_lines)
+
+
 def _meeting_invitations_are_active(meeting: Meeting) -> bool:
     """Return whether participant changes should trigger invitation emails."""
     return bool(meeting.sent_at and meeting.status != 'DRAFT')
+
+
+def _agenda_item_visible_to_participant(item, participant: MeetingParticipant) -> bool:
+    """Return whether an agenda item may be included for this participant."""
+    if item.item_type == 'REGULAR':
+        return True
+    if item.item_type == 'ELECTION':
+        membership = _delivery_membership(participant)
+        return bool(
+            membership
+            and _membership_has_meeting_permission(
+                membership,
+                item.agenda.meeting,
+                'election.view',
+            )
+        )
+    if item.item_type == 'RESOLUTION':
+        try:
+            resolution = item.resolution_agenda_item.resolution
+        except Exception:
+            return False
+        membership = _delivery_membership(participant)
+        return bool(
+            membership
+            and membership.committee_id == resolution.committee_id
+            and _membership_has_permission(membership, 'resolution.view')
+        )
+    return False
+
+
+def _delivery_membership(participant: MeetingParticipant) -> Membership | None:
+    """Return the membership receiving the invitation."""
+    if participant.status == MeetingParticipant.STATUS_ABSENT and participant.substitute_membership_id:
+        return participant.substitute_membership
+    return participant.membership
+
+
+def _membership_has_meeting_permission(membership: Membership, meeting: Meeting, codename: str) -> bool:
+    """Return whether a membership can use a permission for a meeting."""
+    if not _membership_has_permission(membership, codename):
+        return False
+    if membership.committee_id == meeting.committee_id:
+        return True
+    return bool(
+        meeting.committee.committee_type == 'MAIN'
+        and membership.committee.parent_id == meeting.committee_id
+        and membership.committee.committee_type == 'COMMITTEE'
+    )
+
+
+def _membership_has_permission(membership: Membership, codename: str) -> bool:
+    """Return whether a membership role contains the given permission."""
+    return bool(
+        membership.role
+        and membership.role.permissions.filter(codename=codename).exists()
+    )
 
 
 def _substitute_note(substitute: Membership | None) -> str:

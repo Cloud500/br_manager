@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.models import User
+from apps.agendas.models import AgendaItem
 from apps.committees.models import Committee, Membership
 from apps.meetings.models import Meeting
 from apps.participants.models import MeetingParticipant
@@ -609,6 +610,31 @@ class ParticipantsTestCase(TestCase):
         self.assertIsNotNone(participant.invite_sent_at)
         self.assertIsNotNone(participant.last_notified_at)
         self.assertEqual(participant.status, MeetingParticipant.STATUS_INVITED)
+
+    def test_send_meeting_invitations_embeds_agenda_text_without_attachment(self):
+        AgendaItem.objects.create(
+            agenda=self.meeting.agenda,
+            title="Begrüßung und Feststellung der Beschlussfähigkeit",
+            description="Kurze Einführung in die Sitzung.",
+            sort_order=1,
+        )
+        AgendaItem.objects.create(
+            agenda=self.meeting.agenda,
+            title="Beratung aktueller Themen",
+            sort_order=2,
+        )
+
+        send_meeting_invitations(self.meeting, message="Bitte pünktlich sein")
+
+        self.assertGreater(len(mail.outbox), 0)
+        message = mail.outbox[0]
+        self.assertEqual(message.attachments, [])
+        self.assertIn("Tagesordnung:", message.body)
+        self.assertIn("1. Begrüßung und Feststellung der Beschlussfähigkeit", message.body)
+        self.assertIn("   Kurze Einführung in die Sitzung.", message.body)
+        self.assertIn("2. Beratung aktueller Themen", message.body)
+        self.assertNotIn("TOP 1:", message.body)
+        self.assertIn("Bitte pünktlich sein", message.body)
 
     def test_draft_meeting_with_preserved_sent_timestamp_does_not_auto_send_invitation(self):
         self.meeting.status = "DRAFT"

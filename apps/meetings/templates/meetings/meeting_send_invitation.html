@@ -138,28 +138,12 @@
                         {% endif %}
                     </div>
 
-                    <div class="mb-3">
-                        <div class="form-check">
-                            {{ form.include_agenda }}
-                            <label class="form-check-label" for="{{ form.include_agenda.id_for_label }}">
-                                {{ form.include_agenda.label }}
-                            </label>
-                            {% if form.include_agenda.help_text %}
-                                <br><small class="form-text text-muted">{{ form.include_agenda.help_text }}</small>
-                            {% endif %}
-                        </div>
-                        {% if form.include_agenda.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.include_agenda.errors }}
-                            </div>
-                        {% endif %}
-                    </div>
-
                     <div class="alert alert-warning">
                         <i class="bi bi-exclamation-triangle"></i> 
                         <strong>Hinweis:</strong> Nach dem Versenden der Einladung wird der Status 
                         der Sitzung auf "Einladung versendet" geändert. Die Sitzung kann dann nicht 
-                        mehr bearbeitet werden.
+                        mehr bearbeitet werden. Die Tagesordnung wird als formatierter Text in die
+                        E-Mail eingefügt.
                     </div>
 
                     <hr>
@@ -202,6 +186,10 @@
                         <li><strong>Uhrzeit:</strong> {{ meeting.start_time|time:"H:i" }} Uhr</li>
                         <li><strong>Ort:</strong> {{ meeting.get_full_location }}</li>
                     </ul>
+                    <p><strong>Tagesordnung:</strong></p>
+                    <ol class="ps-4 mb-0">
+                        <li>[Tagesordnungspunkt]</li>
+                    </ol>
                     <p><em>[Ihre persönliche Nachricht wird hier eingefügt]</em></p>
                     <p>Mit freundlichen Grüßen</p>
                 </div>
@@ -220,6 +208,7 @@
                 </p>
                 <ul class="small mb-0">
                     <li>E-Mail an alle aktiven Sitzungsteilnehmer</li>
+                    <li>Tagesordnung als formatierter Text im E-Mail-Body</li>
                     <li>Status → "Einladung versendet"</li>
                     <li>Zeitstempel wird gesetzt</li>
                     <li>Keine Bearbeitung mehr möglich</li>
