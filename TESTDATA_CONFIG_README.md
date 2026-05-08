@@ -1,37 +1,72 @@
-# Testdaten-Konfiguration für seed_testdata Command
+# Testdaten-Konfiguration für `seed_testdata`
 
-Diese Konfigurationsdatei steuert die Erstellung von Testdaten für die BR-Manager Anwendung.
+`seed_testdata` erzeugt lokale Entwicklungs- und Testdaten für BR Manager. Der Command liegt in `apps/accounts/management/commands/seed_testdata.py` und arbeitet mit Benutzern, Profilen, 2FA-Recovery-Codes, Gremien und Mitgliedschaften.
+
+> Die Daten sind ausschließlich für lokale Entwicklung/Test gedacht. Alle erzeugten Benutzer verwenden dasselbe Entwicklungs-Passwort und dasselbe Entwicklungs-TOTP-Secret.
 
 ## Verwendung
 
 ```bash
-# Testdaten mit Konfiguration erstellen
+# Konfigurierter Modus mit JSON-Datei aus dem Projektroot
 python manage.py seed_testdata --config testdata_config.json
 
-# Bestehende Daten löschen und neu erstellen
+# Bestehende Testdaten löschen und danach neu erstellen
 python manage.py seed_testdata --clear --config testdata_config.json
 
-# Legacy-Modus (ohne Konfiguration)
+# Komitees/Mitgliedschaften überspringen, nur Benutzer erzeugen
+python manage.py seed_testdata --config testdata_config.json --no-committees
+
+# Legacy-Modus ohne JSON-Konfiguration
 python manage.py seed_testdata --users 10
+
+# Legacy-Modus mit Default: 10 reguläre Benutzer
+python manage.py seed_testdata
 ```
 
-## Konfigurationsstruktur
+## Optionen
 
-### Users (Benutzer)
+| Option | Bedeutung |
+|:---|:---|
+| `--config <datei>` | Lädt eine JSON-Konfiguration relativ zum Projektroot. Wenn gesetzt, wird `--users` ignoriert. |
+| `--clear` | Löscht vorhandene Benutzer, Gremien und Mitgliedschaften vor dem Seeding. Rollen und Permissions bleiben unverändert. |
+| `--users <anzahl>` | Anzahl regulärer Benutzer im Legacy-Modus. Default ohne `--config`: `10`. |
+| `--no-committees` | Erstellt nur Admin und Benutzer, aber keine Gremien/Mitgliedschaften. |
+
+## Erzeugte Zugangsdaten
+
+Alle erzeugten Benutzer haben:
+
+- Passwort: `testpass123`
+- aktivierte TOTP-2FA mit gemeinsamem Entwicklungs-Secret aus `apps.accounts.factories.DEV_TOTP_SECRET`
+- 10 Recovery Codes
+
+Der Command schreibt zusätzlich `testdata_users.txt` in den Projektroot. Diese Datei enthält Login-Hinweise und wird bei jedem Lauf überschrieben.
+
+Hinweis: Der aktuelle Command gibt Zusammenfassung, TOTP-Hinweise und Dateihinweis doppelt aus, weil diese Ausgabeblöcke im `handle()` aktuell doppelt aufgerufen werden. Das ist ein Implementierungsstand der Ausgabe, nicht zwei separate Seed-Läufe.
+
+## Konfigurierter Modus
+
+Beispiel:
+
+```bash
+python manage.py seed_testdata --clear --config testdata_config.example.json
+```
+
+### `users`
 
 ```json
 "users": {
-  "male_count": 12,      // Anzahl männlicher Benutzer
-  "female_count": 8,     // Anzahl weiblicher Benutzer
-  "guest_count": 3       // Anzahl Gäste (für externe Ausschussmitglieder)
+  "male_count": 12,
+  "female_count": 8,
+  "guest_count": 3
 }
 ```
 
-- **male_count**: Männliche User werden für Gremiumsmitglieder verwendet
-- **female_count**: Weibliche User werden für Gremiumsmitglieder verwendet
-- **guest_count**: User ohne spezifisches Geschlecht, werden nur als externe Mitglieder in Ausschüssen verwendet
+- `male_count`: männliche Benutzer für den nicht-Gast-Pool.
+- `female_count`: weibliche Benutzer für den nicht-Gast-Pool.
+- `guest_count`: zusätzliche Gast-Benutzer. Sie sind normale Benutzerkonten, werden aber nicht für Wahllisten des Hauptgremiums verwendet und stehen bevorzugt als externe Ausschussmitglieder zur Verfügung.
 
-### Main Committee (Hauptgremium)
+### `main_committee`
 
 ```json
 "main_committee": {
@@ -39,84 +74,92 @@ python manage.py seed_testdata --users 10
   "total_seats": 9,
   "minority_gender": "F",
   "minority_min_count": 3,
-  "election_lists": [...]
+  "election_lists": []
 }
 ```
 
-- **name**: Name des Hauptgremiums
-- **total_seats**: Gesamtanzahl der Sitze
-- **minority_gender**: Minderheitengeschlecht ("M" oder "F", null für keine Quote)
-- **minority_min_count**: Mindestanzahl für Minderheitengeschlecht (§ 15 Abs. 2 BetrVG)
-- **election_lists**: Array mit Wahllistenkonfigurationen
+- `name`: Name des Hauptgremiums.
+- `total_seats`: Anzahl regulärer Sitze.
+- `minority_gender`: `"M"`, `"F"` oder `null`.
+- `minority_min_count`: Mindestzahl für das Minderheitengeschlecht.
+- `election_lists`: Wahllisten mit Benutzer- und Sitzverteilung.
 
-### Election Lists (Wahllisten)
+### `election_lists`
 
 ```json
 "election_lists": [
   {
     "name": "Liste 1 - Gewerkschaft",
-    "user_count": 5,              // Wie viele User auf diese Liste
-    "seats_in_committee": 4        // Wie viele davon ins Gremium kommen
+    "user_count": 5,
+    "seats_in_committee": 4
   }
 ]
 ```
 
-- **name**: Name der Wahlliste
-- **user_count**: Anzahl User auf dieser Liste (reguläre Mitglieder + Ersatzmitglieder)
-- **seats_in_committee**: Anzahl User von dieser Liste, die reguläre Mitglieder werden
+- `user_count`: Anzahl nicht-Gast-Benutzer auf dieser Liste.
+- `seats_in_committee`: Anzahl der ersten Listenbenutzer, die reguläre Mitglieder werden.
+- Weitere Listenbenutzer werden Ersatzmitglieder.
+- Die ersten drei regulären Mitglieder insgesamt erhalten `CHAIR`, `VICE_CHAIR` und `CLERK`; danach erhalten reguläre Mitglieder `MEMBER`.
+- Die Reihenfolge der verfügbaren Benutzer wird vor der Listenverteilung zufällig gemischt.
 
-**Wichtig:**
-- Die Summe aller `seats_in_committee` muss gleich `total_seats` sein
-- Die Summe aller `user_count` darf nicht größer sein als `male_count + female_count`
-- Der erste User der ersten Liste wird automatisch Vorsitzender (CHAIR)
-- User mit den meisten `seats_in_committee` werden reguläre Mitglieder, Rest wird Ersatzmitglieder
+Validierungen:
 
-### Subcommittees (Ausschüsse)
+- Summe aller `seats_in_committee` muss `main_committee.total_seats` entsprechen.
+- Summe aller `user_count` darf `users.male_count + users.female_count` nicht überschreiten. Gäste zählen hierfür nicht mit.
+- Die Minderheitenquote wird nach der Zuweisung geprüft und als Warnung ausgegeben, wenn sie nicht erfüllt ist.
+
+### `subcommittees`
 
 ```json
 "subcommittees": [
   {
     "name": "Wirtschaftsausschuss",
-    "member_count": 4,      // Mitglieder aus dem Hauptgremium
-    "external_count": 1     // Externe Gäste (aus guest_count Pool)
+    "member_count": 4,
+    "external_count": 1
   }
 ]
 ```
 
-- **name**: Name des Ausschusses
-- **member_count**: Anzahl Mitglieder aus dem Hauptgremium
-- **external_count**: Anzahl externe Gäste
+- `member_count`: Anzahl Mitglieder aus dem Hauptgremium.
+- `external_count`: Anzahl externer Mitglieder aus dem Gast-Pool.
+- `total_seats` des Ausschusses wird als `member_count + external_count` angelegt.
+- Ausschüsse werden mit `substitute_logic_enabled=False` erstellt.
+- Hauptgremiumsmitglieder werden Round-Robin auf Ausschüsse verteilt.
+- Innerhalb jedes Ausschusses erhalten die ersten drei internen Mitglieder `CHAIR`, `VICE_CHAIR` und `CLERK`; weitere erhalten `MEMBER`.
+- Externe Mitglieder erhalten `EXTERNAL_MEMBER`.
 
-**Wichtig:**
-- Ausschüsse haben **keine** Ersatzmitglieder (substitute_logic_enabled=False)
-- `member_count` darf nicht größer sein als `total_seats` des Hauptgremiums
-- Die Summe aller `external_count` darf nicht größer sein als `guest_count`
-- Externe Mitglieder haben keine Wahllisten-Informationen
+Validierungen:
 
-## Beispielkonfiguration
+- `member_count` darf `main_committee.total_seats` nicht überschreiten.
+- Summe aller `external_count` darf `users.guest_count` nicht überschreiten.
 
-Siehe `testdata_config.example.json` für eine vollständige Beispielkonfiguration.
+## Legacy-Modus
 
-## Validierung
+Ohne `--config` erstellt der Command eine feste Struktur:
 
-Der Command validiert automatisch:
-- Alle erforderlichen Felder sind vorhanden
-- Summe der Sitze stimmt mit total_seats überein
-- Genügend User vorhanden für alle Zuweisungen
-- Minderheitenquote wird geprüft (Warnung, falls nicht erfüllt)
-- Externe Mitglieder überschreiten nicht guest_count
+- Admin `admin@example.org`.
+- Standardmäßig 10 reguläre Benutzer oder die über `--users` angegebene Anzahl.
+- Hauptgremium `Betriebsrat` mit 9 Sitzen, Ersatzlogik, Minderheitengeschlecht `F` und Mindestzahl `3`.
+- Rollenverteilung im Hauptgremium: erster Benutzer `CHAIR`, zweiter `VICE_CHAIR`, dritter `CLERK`, weitere reguläre Mitglieder `MEMBER`, übrige Benutzer bis maximal 10 als `SUBSTITUTE`.
+- Feste Ausschüsse: `Wirtschaftsausschuss`, `Personalausschuss`, `Arbeitsschutzausschuss`, `Gleichstellungsausschuss`.
+- Ausschussrollen: erstes internes Mitglied `CHAIR`, zweites `VICE_CHAIR`, drittes `CLERK`, weitere `MEMBER`.
+- Bei ausreichend vielen Benutzern kann der Wirtschaftsausschuss ein externes Mitglied erhalten.
 
-## Erstellte Daten
+## Betriebsausschuss-Automatik
 
-Nach erfolgreicher Ausführung:
-1. **Admin-User**: `admin@example.org` (Superuser)
-2. **Regular Users**: Nach Konfiguration (männlich/weiblich/Gäste)
-3. **Hauptgremium**: Mit regulären Mitgliedern und Ersatzmitgliedern
-4. **Ausschüsse**: Mit Mitgliedern aus Hauptgremium + externe Gäste
+Wenn durch die Gremienlogik ein Betriebsausschuss automatisch erzeugt wird, sucht der Command diesen Ausschuss und füllt fehlende Sitze mit weiteren regulären BR-Mitgliedern auf. Vorsitz und Stellvertretung werden dabei durch die bestehenden Signale/Regeln erwartet.
 
-Alle User haben:
-- Password: `testpass123`
-- 2FA aktiviert mit gemeinsamem TOTP-Secret
-- 10 Recovery Codes
+## Voraussetzungen
 
-Die User-Liste wird in `testdata_users.txt` gespeichert.
+- Rollen müssen vorhanden sein (`CHAIR`, `VICE_CHAIR`, `CLERK`, `MEMBER`, `SUBSTITUTE`, `EXTERNAL_MEMBER`). Sind sie nicht vorhanden, wird die Gremienerstellung übersprungen. Üblicherweise kommen Rollen/Permissions über Migrationen bzw. `seed_roles`.
+- `--clear` löscht Benutzer, Gremien und Mitgliedschaften hart, verändert aber keine Rollen/Permissions.
+
+## Beispieldateien
+
+- `testdata_config.example.json`: vollständiges Beispiel.
+- `testdata_config.json`: größere lokale Beispielkonfiguration.
+- `testdata_config_small.json`: kleine Smoke-Test-Konfiguration.
+
+## Aktuelle Testabdeckung
+
+Für den Command selbst gibt es derzeit keine dedizierten Command-Tests. Änderungen an Validierung, Rollenverteilung oder Datei-/Ausgabeformat sollten daher mit gezielten Tests ergänzt werden.
