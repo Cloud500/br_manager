@@ -1,7 +1,9 @@
 # Rollen & Permissions Matrix
 
-Diese Datei definiert welche Permissions jede Rolle standardmäßig hat.
-Verwendet als Basis für die Anpassung der Migrations-Dateien in `apps/*/migrations/9999_*.py`.
+Diese Datei definiert, welche Permissions jede Rolle standardmäßig hat.
+Sie bildet den aktuell implementierten Stand aus `apps/roles`, den app-spezifischen `9999_*`-/`10000_*`-Seed-Migrationen, den Permission-Mixins und den Seed-Commands ab.
+
+Beim Ändern von Rollen oder Permissions müssen Matrix, Migrationen/Commands, Tests und serverseitige Permission-Prüfungen gemeinsam angepasst werden.
 
 **Legende:**
 
