@@ -81,6 +81,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 # ---------------------------------------------------------------------------
 # Database – PostgreSQL
@@ -148,7 +149,7 @@ LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 # ---------------------------------------------------------------------------
-# Email (default: console in development mode)
+# Email
 # ---------------------------------------------------------------------------
 EMAIL_BACKEND = settings.django_email_backend
 EMAIL_HOST = settings.email_host
@@ -189,8 +190,3 @@ TOTP_ISSUER = "BR-Manager"
 TOTP_TOLERANCE = 1  # ±30 seconds
 RECOVERY_CODES_COUNT = 10
 
-# ---------------------------------------------------------------------------
-# Email Configuration
-# ---------------------------------------------------------------------------
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # Development
-DEFAULT_FROM_EMAIL = "noreply@br-manager.local"

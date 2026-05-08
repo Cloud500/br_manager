@@ -30,7 +30,7 @@ Eine webbasierte Anwendung zur umfassenden digitalen Unterstützung der Betriebs
 
 ---
 
-## ✨ Features
+## ✨ Geplante Features
 
 <table>
   <tr>
@@ -88,6 +88,51 @@ Eine webbasierte Anwendung zur umfassenden digitalen Unterstützung der Betriebs
   <tr>
     <td>🔍 <b>Audit-Logging</b></td>
     <td>Lückenlose Protokollierung aller sicherheitsrelevanten Aktionen</td>
+  </tr>
+</table>
+
+### ✅ Bereits umgesetzt
+
+<table>
+  <tr>
+    <td>👤 <b>Benutzer & Auth</b></td>
+    <td>E-Mail-Login mit Custom User Model, Profil, Passwortänderung, Einladungen/Registrierung, 2FA mit TOTP und Recovery Codes.</td>
+  </tr>
+  <tr>
+    <td>🔑 <b>Rollen & Rechte</b></td>
+    <td>Eigenes RBAC-System mit Rollen, Permissions, Rollenverwaltung, Permission-Zuweisung und Seed-Migrationen.</td>
+  </tr>
+  <tr>
+    <td>🏢 <b>Gremien & Ausschüsse</b></td>
+    <td>Hauptgremien, Ausschüsse, Mitgliedschaften, Ersatzmitglieder, externe Mitglieder, Soft Delete und Betriebsausschuss-Automatik.</td>
+  </tr>
+  <tr>
+    <td>📋 <b>Sitzungen</b></td>
+    <td>CRUD, Sitzungsnummern, Online-/Präsenz-/Hybrid-Validierung, Einladungsversand sowie Workflow von Entwurf bis versenden der Einladungen.</td>
+  </tr>
+  <tr>
+    <td>✅ <b>Teilnehmer</b></td>
+    <td>Teilnehmerdatensätze, Hinzufügen/Entfernen, Abwesenheiten, Ersatz-/Teilnehmeraktionen und serverseitige Berechtigungsprüfung.</td>
+  </tr>
+  <tr>
+    <td>📝 <b>Tagesordnungen</b></td>
+    <td>Automatisch angelegte Tagesordnungen je Sitzung, reguläre TOPs, Beschluss-TOPs, Nummerierung, Hierarchie und Reordering.</td>
+  </tr>
+  <tr>
+    <td>🗳️ <b>Beschlüsse</b></td>
+    <td>Beschlussentwürfe, Vorschlagen, Annehmen/Ablehnen, Beschlussnummern und Verknüpfung mit Beschluss-TOPs.</td>
+  </tr>
+  <tr>
+    <td>🏆 <b>Wahlen</b></td>
+    <td>Wahl- und Kandidatenmodelle, Kandidaten-Formsets, CRUD und Veröffentlichung mit serverseitigen Permission-Prüfungen.</td>
+  </tr>
+  <tr>
+    <td>🔔 <b>E-Mail-Vorlagen</b></td>
+    <td>CRUD für E-Mail-Vorlagen, HTML-Sanitizing, Text-Extraktion, gerenderte E-Mail-Hilfsdaten und eigene Template-Permission.</td>
+  </tr>
+  <tr>
+    <td>📊 <b>Dashboard</b></td>
+    <td>Login-geschütztes Dashboard mit Navigation zu den implementierten Modulen.</td>
   </tr>
 </table>
 
@@ -168,11 +213,10 @@ br_manager/
 ├── templates/                  # Globale Django Templates
 ├── static/                     # CSS, JS, Vendor-Assets
 ├── media/                      # Hochgeladene Dateien
-├── requirements/
 ├── docker/
 │   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── nginx.conf
+│   ├── docker-compose.dev.yml
+│   └── docker-compose.prod.yml
 └── docs/                       # Projektdokumentation
 ```
 
@@ -203,15 +247,36 @@ br_manager/
 git clone <repository-url>
 cd br_manager
 
-# Docker-Container starten
-docker compose -f docker/docker-compose.yml up -d
+# Development-Container starten (SQLite, Hot Reload)
+docker compose -f docker/docker-compose.dev.yml up --build
 
-# Datenbank-Migrationen ausführen
-docker compose -f docker/docker-compose.yml exec web python manage.py migrate
-
-# Superuser erstellen
-docker compose -f docker/docker-compose.yml exec web python manage.py createsuperuser
+# Production-Container starten (PostgreSQL)
+cp .env.example .env
+# .env anpassen: DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, DB_PASSWORD,
+# optional DJANGO_CSRF_TRUSTED_ORIGINS, ROOT_USER_EMAIL und ROOT_USER_PASSWORD setzen
+docker compose --env-file .env -f docker/docker-compose.prod.yml up -d --build
 ```
+
+Docker startet die Anwendung als ASGI-App. Development nutzt Uvicorn mit Reload,
+Production nutzt Gunicorn als Prozessmanager mit Uvicorn-Worker. Beim Containerstart
+läuft automatisch: Datenbank-Verfügbarkeit prüfen, `migrate`, in Production zusätzlich
+`collectstatic`, danach optional die initiale Root-User-Erstellung.
+
+Der Development-Container führt nach den Migrationen einmalig `seed_testdata` aus,
+solange die Datenbank noch keine Benutzer enthält. Standardmäßig wird
+`testdata_config_small.json` verwendet; bei Bedarf kann die Datei über
+`DJANGO_SEED_TESTDATA_CONFIG` überschrieben werden.
+
+Wenn `ROOT_USER_EMAIL` und `ROOT_USER_PASSWORD` gesetzt sind, wird ein initialer
+Superuser erstellt, sofern die E-Mail-Adresse noch nicht existiert. Existiert die
+Adresse bereits, wird kein Passwort überschrieben und ein normaler Benutzer wird nicht
+stillschweigend zum Superuser hochgestuft.
+
+> ⚠️ Die Production-Compose bindet Port 8000 nur an `127.0.0.1` und erwartet einen
+> TLS-terminierenden Reverse Proxy, der `X-Forwarded-Proto: https` setzt.
+
+> 💡 Development erzeugt seine Admin- und Testbenutzer über `seed_testdata`.
+> Für Production müssen initiale Root-User-Werte bewusst über `.env` gesetzt werden.
 
 ### 💻 Lokale Entwicklung
 
@@ -220,25 +285,25 @@ docker compose -f docker/docker-compose.yml exec web python manage.py createsupe
 git clone <repository-url>
 cd br_manager
 
-# Virtuelle Umgebung erstellen und aktivieren
-python -m venv .venv
-source .venv/bin/activate   # Linux/macOS
-.venv\Scripts\activate      # Windows
+# Abhängigkeiten für die Entwicklung installieren
+uv sync --group dev
 
-# Abhängigkeiten installieren
-pip install -r requirements/development.txt
-
-# Umgebungsvariablen konfigurieren
-cp .env.example .env        # Anpassen nach Bedarf
+# Umgebungsvariablen konfigurieren (lokal nach Bedarf anpassen)
+cp .env.example .env
 
 # Datenbank-Migrationen
-python manage.py migrate
+uv run python manage.py migrate
 
-# Entwicklungsserver starten
-python manage.py runserver
+# Optionale lokale Testdaten erzeugen
+uv run python manage.py seed_testdata --clear --config testdata_config_small.json
+
+# Entwicklungsserver starten (ASGI/Uvicorn)
+uv run uvicorn config.asgi:application --host 127.0.0.1 --port 8000 --reload
 ```
 
 > 💡 **Tipp:** Die Anwendung ist dann unter `http://localhost:8000` erreichbar.
+> `manage.py` nutzt standardmäßig `config.settings.development`; lokal wird dadurch SQLite (`db.sqlite3`) verwendet.
+> Weitere Details zu Testdaten, Konfigurationsdateien und Optionen wie `--no-committees` stehen in [`TESTDATA_CONFIG_README.md`](TESTDATA_CONFIG_README.md).
 
 ---
 
@@ -269,8 +334,6 @@ Die vollständige Projektdokumentation befindet sich im Verzeichnis [`docs/`](do
 | 🔑 | [Berechtigungskonzept](docs/06_berechtigungskonzept.md) | Rollen, Rechte und Zugriffssteuerung |
 | ⚖️ | [Rechtliche Rahmenbedingungen](docs/07_rechtliche_rahmenbedingungen.md) | BetrVG- und DSGVO-Konformität |
 | 🔒 | [Sicherheitskonzept](docs/08_sicherheitskonzept.md) | Sicherheitsmaßnahmen und Verschlüsselung |
-
-> 📚 Implementierungsleitfäden befinden sich unter [`docs/implementation/`](docs/implementation/00_uebersicht.md)
 
 ---
 
