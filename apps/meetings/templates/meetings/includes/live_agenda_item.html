@@ -1,4 +1,4 @@
-<div class="list-group-item {% if current_agenda_item.pk == item.pk %}list-group-item-primary{% endif %}">
+<div class="list-group-item {% if current_agenda_item.pk == item.pk %}list-group-item-primary{% endif %}" data-live-agenda-item-id="{{ item.pk }}">
     <div class="d-flex justify-content-between gap-3">
         <div>
             <strong>TOP {{ item.item_number }}</strong> {{ item.title }}

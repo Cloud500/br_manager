@@ -146,6 +146,18 @@
             const suppressUntil = Number(document.body.dataset.suppressAgendaRefreshUntil || 0);
             return suppressUntil && Date.now() < suppressUntil;
         }
+        function markCurrentAgendaItem(currentItemId) {
+            const agenda = document.getElementById('live-agenda');
+            if (!agenda || currentItemId === undefined || currentItemId === null) {
+                return;
+            }
+            agenda.querySelectorAll('[data-live-agenda-item-id]').forEach(function (itemElement) {
+                itemElement.classList.toggle(
+                    'list-group-item-primary',
+                    Boolean(currentItemId) && itemElement.dataset.liveAgendaItemId === String(currentItemId)
+                );
+            });
+        }
         function triggerLiveRefresh(options) {
             if (typeof htmx === 'undefined') {
                 return;
@@ -166,13 +178,14 @@
             }
             htmx.trigger(document.body, 'br-live-refresh-agenda');
         }
-        function handleLiveVersion(listener, version) {
-            if (!version) {
+        function handleLiveEvent(listener, payload) {
+            if (!payload || !payload.version) {
                 return;
             }
+            markCurrentAgendaItem(payload.current_agenda_item_id);
             const previousVersion = listener.dataset.liveVersion || '';
-            listener.dataset.liveVersion = version;
-            if (previousVersion && previousVersion !== version) {
+            listener.dataset.liveVersion = payload.version;
+            if (previousVersion && previousVersion !== payload.version) {
                 triggerLiveRefresh({ forceAgenda: false });
             }
         }
@@ -186,7 +199,7 @@
             source.addEventListener('live-version', function (event) {
                 try {
                     const payload = JSON.parse(event.data);
-                    handleLiveVersion(listener, payload.version);
+                    handleLiveEvent(listener, payload);
                 } catch (error) {
                     return;
                 }
@@ -217,10 +230,12 @@
                 return;
             }
             const listener = document.querySelector('[data-live-events]');
-            const triggeredVersion = event.detail?.version || event.detail?.value?.version;
+            const eventPayload = event.detail?.version ? event.detail : event.detail?.value;
+            const triggeredVersion = eventPayload?.version;
             if (listener && triggeredVersion) {
                 listener.dataset.liveVersion = triggeredVersion;
             }
+            markCurrentAgendaItem(eventPayload?.current_agenda_item_id);
             document.body.dataset.suppressAgendaRefreshUntil = String(Date.now() + 3000);
             htmx.trigger(document.body, 'br-live-refresh-status');
             htmx.trigger(document.body, 'br-live-refresh-participants');

@@ -543,6 +543,8 @@ class MeetingLiveWorkflowTest(TestCase):
         self.assertContains(response, "EventSource")
         self.assertContains(response, "suppressAgendaRefreshUntil")
         self.assertContains(response, "classList.add('ql-container', 'ql-snow')")
+        self.assertContains(response, "markCurrentAgendaItem")
+        self.assertContains(response, "current_agenda_item_id")
         self.assertContains(response, "br-live-refresh-agenda")
         self.assertContains(response, 'hx-trigger="br-live-refresh-agenda from:body"')
         self.assertContains(response, 'hx-trigger="br-live-refresh-status from:body"')
@@ -593,6 +595,7 @@ class MeetingLiveWorkflowTest(TestCase):
         self.assertContains(response, "protocol-quill-field")
         self.assertContains(response, "data-quill-input")
         self.assertContains(response, "d-none")
+        self.assertContains(response, f'data-live-agenda-item-id="{other_item.pk}"')
         self.assertNotContains(response, 'type="hidden" name="body"')
 
     def test_live_events_endpoint_streams_current_version(self):
@@ -613,6 +616,7 @@ class MeetingLiveWorkflowTest(TestCase):
         first_event = next(response.streaming_content).decode()
         self.assertIn("event: live-version", first_event)
         self.assertIn(str(self.agenda_item.pk), first_event)
+        self.assertIn("current_agenda_item_id", first_event)
 
     def test_live_note_post_requires_reconfirmation(self):
         """Live TOP note updates must use the same re-confirmation gate as live actions."""
@@ -693,6 +697,7 @@ class MeetingLiveWorkflowTest(TestCase):
         self.assertNotIn("Location", response.headers)
         self.assertIn("br-live-updated", response.headers.get("HX-Trigger"))
         self.assertIn("version", response.headers.get("HX-Trigger"))
+        self.assertIn("current_agenda_item_id", response.headers.get("HX-Trigger"))
         self.assertContains(response, "list-group-item-primary")
 
     def test_live_events_stream_detects_current_top_change(self):
@@ -722,6 +727,7 @@ class MeetingLiveWorkflowTest(TestCase):
 
         self.assertIn(str(self.agenda_item.pk), first_event)
         self.assertIn(str(other_item.pk), second_event)
+        self.assertIn("current_agenda_item_id", second_event)
 
     def test_live_version_changes_after_current_top_update(self):
         """Other clients must detect TOP activation even when only current TOP changes."""

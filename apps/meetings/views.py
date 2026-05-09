@@ -772,10 +772,16 @@ def _render_live_agenda_response(request, meeting: Meeting) -> HttpResponse:
         "meetings/includes/live_agenda.html",
         {"meeting": meeting, **_live_context(meeting, request.user)},
     )
-    response["HX-Trigger"] = json.dumps(
-        {"br-live-updated": {"version": _live_version_for_meeting(meeting)}}
-    )
+    response["HX-Trigger"] = json.dumps({"br-live-updated": _live_event_payload(meeting)})
     return response
+
+
+def _live_event_payload(meeting: Meeting) -> dict:
+    """Return client payload for live meeting change events."""
+    return {
+        "version": _live_version_for_meeting(meeting),
+        "current_agenda_item_id": str(meeting.current_agenda_item_id or ""),
+    }
 
 
 def _live_version_for_meeting(meeting: Meeting) -> str:
@@ -807,7 +813,7 @@ class MeetingLiveVersionView(MeetingLiveRuntimeMixin, View):
     def get(self, request, *args, **kwargs):
         """Return live version JSON without rendering all fragments."""
         meeting = self.get_meeting()
-        return JsonResponse({"version": _live_version_for_meeting(meeting)})
+        return JsonResponse(_live_event_payload(meeting))
 
 
 class MeetingLiveEventsView(MeetingLiveRuntimeMixin, View):
@@ -825,7 +831,7 @@ class MeetingLiveEventsView(MeetingLiveRuntimeMixin, View):
                 version = _live_version_for_meeting(live_meeting)
                 if version != last_version:
                     last_version = version
-                    payload = json.dumps({"version": version})
+                    payload = json.dumps(_live_event_payload(live_meeting))
                     yield f"event: live-version\ndata: {payload}\n\n"
                 time.sleep(1)
 
