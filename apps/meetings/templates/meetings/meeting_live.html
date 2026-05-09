@@ -1,0 +1,235 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block meeting_content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h1 class="h3 mb-1">Live-Sitzung: {{ meeting.title }}</h1>
+            <p class="text-muted mb-0">{{ meeting.meeting_number }} · {{ meeting.date|date:'d.m.Y' }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            {% if user_can_complete_live_meeting %}
+                <form method="post" action="{% url 'meetings:meeting_complete' meeting.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-check-circle"></i> Sitzung abschließen
+                    </button>
+                </form>
+            {% endif %}
+            <a href="{% url 'meetings:meeting_detail' meeting.pk %}" class="btn btn-outline-secondary">Zur Detailansicht</a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            {% include 'meetings/includes/live_status.html' %}
+            <div class="mt-4">
+                {% include 'meetings/includes/live_agenda.html' %}
+            </div>
+        </div>
+        <div class="col-lg-4">
+            {% include 'meetings/includes/live_participants.html' %}
+        </div>
+    </div>
+    <div
+        data-live-events
+        data-live-events-url="{% url 'meetings:meeting_live_events' meeting.pk %}"
+        data-live-version="{{ live_version }}"
+        aria-hidden="true"></div>
+</div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css">
+<style>
+    .protocol-note-form {
+        background: #fff;
+    }
+    [data-quill-input],
+    [data-quill-input][hidden],
+    [data-quill-input].d-none {
+        display: none !important;
+    }
+    .protocol-quill-field {
+        background: #fff;
+        border-radius: .375rem;
+    }
+    .protocol-quill-editor {
+        background: #fff;
+        min-height: 12rem;
+        border: 1px solid #ced4da;
+        border-radius: 0 0 .375rem .375rem;
+        font-size: 1rem;
+    }
+    .protocol-quill-field .ql-toolbar {
+        background: #f8f9fa;
+        border: 1px solid #ced4da;
+        border-bottom: 0;
+        border-radius: .375rem .375rem 0 0;
+    }
+    .protocol-quill-field .ql-container {
+        min-height: 12rem;
+        border: 1px solid #ced4da;
+        border-radius: 0 0 .375rem .375rem;
+        font-size: 1rem;
+    }
+    .protocol-quill-field .ql-tooltip.ql-hidden {
+        display: none !important;
+    }
+    .protocol-quill-field .ql-tooltip {
+        z-index: 1060;
+    }
+    .protocol-quill-editor .ql-editor {
+        min-height: 10rem;
+        background: #fff;
+        border-radius: 0 0 .375rem .375rem;
+    }
+    .protocol-formatted-content .ql-size-small { font-size: 0.75em; }
+    .protocol-formatted-content .ql-size-large { font-size: 1.5em; }
+    .protocol-formatted-content .ql-size-huge { font-size: 2.5em; }
+    .protocol-formatted-content li[data-list="bullet"] { list-style-type: disc; }
+    .protocol-formatted-content li[data-list="ordered"] { list-style-type: decimal; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof Quill === 'undefined') {
+            return;
+        }
+        const toolbarOptions = [
+            [{ header: [3, 4, 5, 6, false] }],
+            [{ size: ['small', false, 'large'] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ color: [] }, { background: [] }],
+            [{ script: 'sub' }, { script: 'super' }],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            [{ indent: '-1' }, { indent: '+1' }],
+            [{ align: [] }],
+            ['blockquote', 'link', 'clean']
+        ];
+        function initializeQuillEditors(root) {
+            root.querySelectorAll('[data-quill-editor]:not([data-quill-initialized])').forEach(function (editorElement) {
+                const form = editorElement.closest('form');
+                const input = form ? form.querySelector('[data-quill-input]') : null;
+                if (!input) {
+                    return;
+                }
+                editorElement.dataset.quillInitialized = 'true';
+                const wrapper = editorElement.closest('[data-quill-wrapper]');
+                if (wrapper) {
+                    wrapper.querySelectorAll(':scope > .ql-toolbar').forEach(function (toolbar) { toolbar.remove(); });
+                }
+                const initialHtml = input.value || input.textContent || '';
+                const quill = new Quill(editorElement, { theme: 'snow', modules: { toolbar: toolbarOptions } });
+                editorElement.classList.add('ql-container', 'ql-snow');
+                if (initialHtml.trim()) {
+                    quill.clipboard.dangerouslyPasteHTML(initialHtml);
+                }
+                function syncEditor() { input.value = quill.root.innerHTML; }
+                syncEditor();
+                quill.on('text-change', syncEditor);
+                form.addEventListener('submit', syncEditor);
+                form.addEventListener('htmx:configRequest', syncEditor);
+            });
+        }
+        function normalizeQuillEditors(root) {
+            root.querySelectorAll('[data-quill-editor][data-quill-initialized]').forEach(function (editorElement) {
+                editorElement.classList.add('ql-container', 'ql-snow');
+                const editorBody = editorElement.querySelector('.ql-editor');
+                if (editorBody) {
+                    editorBody.setAttribute('contenteditable', 'true');
+                }
+            });
+        }
+        function agendaIsBeingEdited() {
+            const active = document.activeElement;
+            return Boolean(active && active.closest && active.closest('#live-agenda form'));
+        }
+        function ownAgendaWriteIsSettling() {
+            const suppressUntil = Number(document.body.dataset.suppressAgendaRefreshUntil || 0);
+            return suppressUntil && Date.now() < suppressUntil;
+        }
+        function triggerLiveRefresh(options) {
+            if (typeof htmx === 'undefined') {
+                return;
+            }
+            htmx.trigger(document.body, 'br-live-refresh-status');
+            htmx.trigger(document.body, 'br-live-refresh-participants');
+            if (!options?.forceAgenda && ownAgendaWriteIsSettling()) {
+                return;
+            }
+            if (options && options.forceAgenda) {
+                document.body.dataset.pendingAgendaRefresh = '';
+                htmx.trigger(document.body, 'br-live-refresh-agenda');
+                return;
+            }
+            if (agendaIsBeingEdited()) {
+                document.body.dataset.pendingAgendaRefresh = 'true';
+                return;
+            }
+            htmx.trigger(document.body, 'br-live-refresh-agenda');
+        }
+        function handleLiveVersion(listener, version) {
+            if (!version) {
+                return;
+            }
+            const previousVersion = listener.dataset.liveVersion || '';
+            listener.dataset.liveVersion = version;
+            if (previousVersion && previousVersion !== version) {
+                triggerLiveRefresh({ forceAgenda: false });
+            }
+        }
+        function initializeLiveEvents() {
+            const listener = document.querySelector('[data-live-events]');
+            if (!listener || listener.dataset.liveEventsInitialized === 'true' || typeof EventSource === 'undefined') {
+                return;
+            }
+            listener.dataset.liveEventsInitialized = 'true';
+            const source = new EventSource(listener.dataset.liveEventsUrl);
+            source.addEventListener('live-version', function (event) {
+                try {
+                    const payload = JSON.parse(event.data);
+                    handleLiveVersion(listener, payload.version);
+                } catch (error) {
+                    return;
+                }
+            });
+        }
+        initializeQuillEditors(document);
+        initializeLiveEvents();
+        document.body.addEventListener('htmx:beforeSwap', function (event) {
+            if (event.target && event.target.id === 'live-agenda') {
+                event.target.querySelectorAll('.ql-tooltip, .ql-toolbar').forEach(function (element) {
+                    element.remove();
+                });
+            }
+        });
+        document.body.addEventListener('htmx:afterSwap', function (event) {
+            initializeQuillEditors(event.target);
+            normalizeQuillEditors(event.target);
+            if (event.target && event.target.id === 'live-agenda') {
+                document.body.dataset.suppressAgendaRefreshUntil = String(Date.now() + 3000);
+            }
+        });
+        document.body.addEventListener('htmx:afterSettle', function (event) {
+            initializeQuillEditors(event.target);
+            normalizeQuillEditors(event.target);
+        });
+        document.body.addEventListener('br-live-updated', function (event) {
+            if (typeof htmx === 'undefined') {
+                return;
+            }
+            const listener = document.querySelector('[data-live-events]');
+            const triggeredVersion = event.detail?.version || event.detail?.value?.version;
+            if (listener && triggeredVersion) {
+                listener.dataset.liveVersion = triggeredVersion;
+            }
+            document.body.dataset.suppressAgendaRefreshUntil = String(Date.now() + 3000);
+            htmx.trigger(document.body, 'br-live-refresh-status');
+            htmx.trigger(document.body, 'br-live-refresh-participants');
+        });
+        document.body.addEventListener('focusout', function () {
+            if (document.body.dataset.pendingAgendaRefresh === 'true' && !agendaIsBeingEdited()) {
+                triggerLiveRefresh({ forceAgenda: true });
+            }
+        });
+    });
+</script>
+{% endblock %}

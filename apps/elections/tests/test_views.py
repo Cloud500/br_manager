@@ -11,7 +11,7 @@ from apps.accounts.factories import UserFactory
 from apps.agendas.models import AgendaItem
 from apps.committees.factories import MainCommitteeFactory
 from apps.committees.models import Membership
-from apps.elections.models import Election, ElectionCandidate
+from apps.elections.models import Election, ElectionCandidate, ElectionCandidateResult, ElectionResult
 from apps.meetings.models import Meeting
 from apps.resolutions.models import Resolution, ResolutionAgendaItem
 from apps.roles.models import Permission, Role, RolePermission
@@ -85,6 +85,61 @@ class ElectionViewTests(TestCase):
 
         edit_response = self.client.get(reverse('elections:election_update', kwargs={'pk': election.pk}))
         self.assertEqual(edit_response.status_code, 302)
+
+    def test_election_list_shows_visible_elections(self):
+        """Users see elections from committees where they have election view permission."""
+        visible_election = self._election(title='Sichtbare Wahl')
+        hidden_committee = MainCommitteeFactory.create()
+        hidden_meeting = Meeting.objects.create(
+            committee=hidden_committee,
+            title='Andere Sitzung',
+            date=date.today(),
+            start_time=time(11, 0),
+            meeting_type='ONLINE',
+            location_url='https://example.org/other',
+            created_by=self.chair_user,
+        )
+        hidden_item = AgendaItem.objects.create(
+            agenda=hidden_meeting.agenda,
+            title='Verborgene Wahl',
+            sort_order=1,
+            item_type=AgendaItem.TYPE_ELECTION,
+        )
+        Election.objects.create(agenda_item=hidden_item)
+        self.client.force_login(self.member_user)
+
+        response = self.client.get(reverse('elections:election_list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, visible_election.title)
+        self.assertNotContains(response, 'Verborgene Wahl')
+
+    def test_election_detail_shows_recorded_result(self):
+        """Election details show recorded result data for traceability."""
+        election = self._election(title='Wahl mit Ergebnis')
+        candidate = ElectionCandidate.objects.create(election=election, name='Max Mustermann')
+        result = ElectionResult.objects.create(
+            election=election,
+            is_quorate=True,
+            eligible_voters=5,
+            votes_cast=4,
+            invalid_votes=1,
+            recorded_by=self.chair_user,
+        )
+        ElectionCandidateResult.objects.create(
+            result=result,
+            candidate=candidate,
+            votes=3,
+            elected=True,
+        )
+        self.client.force_login(self.member_user)
+
+        response = self.client.get(reverse('elections:election_detail', kwargs={'pk': election.pk}))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Wahlergebnis')
+        self.assertContains(response, 'Max Mustermann')
+        self.assertContains(response, 'gewählt')
 
     def test_published_election_is_read_only_in_views(self):
         """Published election blocks edit/delete even for users with write permission."""

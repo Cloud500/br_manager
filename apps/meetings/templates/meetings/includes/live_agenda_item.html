@@ -1,0 +1,122 @@
+<div class="list-group-item {% if current_agenda_item.pk == item.pk %}list-group-item-primary{% endif %}">
+    <div class="d-flex justify-content-between gap-3">
+        <div>
+            <strong>TOP {{ item.item_number }}</strong> {{ item.title }}
+            {% if item.description %}<div class="small text-muted">{{ item.description }}</div>{% endif %}
+            {% if item.protocol_note and item.protocol_note.body and not user_can_edit_protocol_notes %}
+                <div class="alert alert-light border mt-2 mb-0 py-2">
+                    <strong>Protokollnotiz:</strong>
+                    <div class="protocol-formatted-content">{{ item.protocol_note.body|safe }}</div>
+                </div>
+            {% endif %}
+            {% if user_can_edit_protocol_notes %}
+                <form method="post" action="{% url 'protocols:agenda_item_note_update' meeting.pk item.pk %}" hx-post="{% url 'protocols:agenda_item_note_update' meeting.pk item.pk %}" hx-target="#live-agenda" hx-swap="outerHTML" class="protocol-note-form mt-3 border rounded p-3">
+                    {% csrf_token %}
+                    <label class="form-label fw-semibold" for="note-{{ item.pk }}">Protokollnotiz</label>
+                    <textarea name="body" class="d-none" data-quill-input hidden aria-hidden="true" tabindex="-1">{% if item.protocol_note %}{{ item.protocol_note.body|escape }}{% endif %}</textarea>
+                    <div class="protocol-quill-field" data-quill-wrapper>
+                        <div id="note-{{ item.pk }}" class="protocol-quill-editor" data-quill-editor aria-label="Formatierbare Notiz zu {{ item.title }}"></div>
+                    </div>
+                    <div class="form-text">Formatierbares Arbeitsfeld für die Protokollführung.</div>
+                    <button type="submit" class="btn btn-outline-primary btn-sm mt-2">Notiz speichern</button>
+                </form>
+            {% endif %}
+            {% if item.resolution_has_result %}
+                <div class="alert alert-info border mt-3 mb-0 py-2">
+                    <strong>Beschlussergebnis:</strong>
+                    <div>Dafür: {{ item.resolution_result.yes_votes }} · Dagegen: {{ item.resolution_result.no_votes }} · Enthaltung: {{ item.resolution_result.abstentions }}</div>
+                    {% if item.resolution_result.decision_text %}
+                        <div class="protocol-formatted-content mt-2">{{ item.resolution_result.decision_text|safe }}</div>
+                    {% endif %}
+                </div>
+            {% endif %}
+            {% if item.item_type == 'ELECTION' and item.election_result %}
+                <div class="alert alert-info border mt-3 mb-0 py-2">
+                    <strong>Wahlergebnis:</strong>
+                    <div>Ungültige Stimmen: {{ item.election_result.invalid_votes }}</div>
+                    <ul class="mb-0 mt-2">
+                        {% for candidate in item.election_candidates %}
+                            <li>
+                                {{ candidate.name }}: {{ candidate.result_votes }} Stimme{% if candidate.result_votes != 1 %}n{% endif %}{% if candidate.result_elected %} · gewählt{% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            {% if current_agenda_item.pk == item.pk and user_can_edit_protocol_notes and item.item_type == 'RESOLUTION' and item.resolution_link %}
+                <form method="post" action="{% url 'meetings:meeting_record_resolution_result' meeting.pk item.pk %}" hx-post="{% url 'meetings:meeting_record_resolution_result' meeting.pk item.pk %}" hx-target="#live-agenda" hx-swap="outerHTML" class="mt-3 border rounded p-3">
+                    {% csrf_token %}
+                    <h3 class="h6">Beschlussergebnis erfassen</h3>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label" for="yes-{{ item.pk }}">Dafür</label>
+                            <input id="yes-{{ item.pk }}" class="form-control form-control-sm" type="number" min="0" name="yes_votes" value="{{ item.resolution_result.yes_votes|default:0 }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="no-{{ item.pk }}">Dagegen</label>
+                            <input id="no-{{ item.pk }}" class="form-control form-control-sm" type="number" min="0" name="no_votes" value="{{ item.resolution_result.no_votes|default:0 }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="abst-{{ item.pk }}">Enthaltung</label>
+                            <input id="abst-{{ item.pk }}" class="form-control form-control-sm" type="number" min="0" name="abstentions" value="{{ item.resolution_result.abstentions|default:0 }}">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label fw-semibold" for="decision-{{ item.pk }}">Beschlussfassung</label>
+                        <textarea name="decision_text" class="d-none" data-quill-input hidden aria-hidden="true" tabindex="-1">{{ item.resolution_result.decision_text|default:''|escape }}</textarea>
+                        <div class="protocol-quill-field" data-quill-wrapper>
+                            <div id="decision-{{ item.pk }}" class="protocol-quill-editor" data-quill-editor aria-label="Formatierbare Beschlussfassung zu {{ item.title }}"></div>
+                        </div>
+                    </div>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" name="is_quorate" id="quorate-{{ item.pk }}" {% if item.resolution_quorum_checked %}checked{% endif %}>
+                        <label class="form-check-label" for="quorate-{{ item.pk }}">Beschlussfähig</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm mt-3">Beschlussergebnis speichern</button>
+                </form>
+            {% endif %}
+            {% if current_agenda_item.pk == item.pk and user_can_edit_protocol_notes and item.item_type == 'ELECTION' and item.election_obj %}
+                <form method="post" action="{% url 'meetings:meeting_record_election_result' meeting.pk item.pk %}" hx-post="{% url 'meetings:meeting_record_election_result' meeting.pk item.pk %}" hx-target="#live-agenda" hx-swap="outerHTML" class="mt-3 border rounded p-3">
+                    {% csrf_token %}
+                    <h3 class="h6">Wahlergebnis erfassen</h3>
+                    {% for candidate in item.election_candidates %}
+                        <div class="row g-2 align-items-end mb-2">
+                            <div class="col">
+                                <label class="form-label" for="candidate-{{ candidate.pk }}">{{ candidate.name }}</label>
+                                <input id="candidate-{{ candidate.pk }}" class="form-control form-control-sm" type="number" min="0" name="candidate_{{ candidate.pk }}" value="{{ candidate.result_votes|default:0 }}">
+                            </div>
+                            <div class="col-auto">
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" name="elected_{{ candidate.pk }}" id="elected-{{ candidate.pk }}" {% if candidate.result_elected %}checked{% endif %}>
+                                    <label class="form-check-label" for="elected-{{ candidate.pk }}">gewählt</label>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                    <label class="form-label" for="invalid-{{ item.pk }}">Ungültige Stimmen</label>
+                    <input id="invalid-{{ item.pk }}" class="form-control form-control-sm" type="number" min="0" name="invalid_votes" value="{{ item.election_result.invalid_votes|default:0 }}">
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" name="is_quorate" id="election-quorate-{{ item.pk }}" {% if item.election_quorum_checked %}checked{% endif %}>
+                        <label class="form-check-label" for="election-quorate-{{ item.pk }}">Beschlussfähig</label>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm mt-3">Wahlergebnis speichern</button>
+                </form>
+            {% endif %}
+        </div>
+        <div class="text-nowrap">
+            {% if user_can_control_live_meeting %}
+                <form method="post" action="{% url 'meetings:meeting_set_current_item' meeting.pk item.pk %}" hx-post="{% url 'meetings:meeting_set_current_item' meeting.pk item.pk %}" hx-target="#live-agenda" hx-swap="outerHTML" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-primary btn-sm">Aktivieren</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+    {% if item.visible_children %}
+        <div class="ms-4 mt-2 border-start ps-3">
+            {% for child in item.visible_children %}
+                {% include 'meetings/includes/live_agenda_item.html' with item=child %}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>

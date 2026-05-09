@@ -20,10 +20,14 @@
                         <tr>
                             <th>Name</th>
                             <th>Rolle / Funktion</th>
-                            <th>Status</th>
-                            <th>Art</th>
-                            <th>Benachrichtigung</th>
-                            <th class="text-end">Aktionen</th>
+                            {% if participant_management_locked %}
+                                <th>Anwesenheit</th>
+                            {% else %}
+                                <th>Status</th>
+                                <th>Art</th>
+                                <th>Benachrichtigung</th>
+                                <th class="text-end">Aktionen</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -40,54 +44,64 @@
                                         {{ participant.role_for_display }}
                                     </span>
                                 </td>
-                                <td>
-                                    <span class="badge bg-{% if participant.status == 'CANCELLED' %}danger{% elif participant.status == 'ABSENT' or participant.status == 'SUBSTITUTE_PROPOSED' %}warning{% else %}secondary{% endif %}">
-                                        {{ participant.get_status_display }}
-                                    </span>
-                                    {% if participant.status == 'ABSENT' and participant.substitute_membership %}
-                                        <div class="small mt-1">
-                                            <i class="bi bi-arrow-right"></i>
-                                            {{ participant.substitute_name_for_display }}
-                                        </div>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {{ participant.get_participant_type_display }}
-                                </td>
-                                <td>
-                                    {% if participant.last_notified_at %}
-                                        {{ participant.last_notified_at|date:"d.m.Y H:i" }}
-                                    {% else %}
-                                        <span class="text-muted">Noch nicht versendet</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    <div class="btn-group btn-group-sm" role="group">
-                                        {% if user_can_mark_participant_absent and participant.status != 'CANCELLED' %}
-                                            <a href="{% url 'participants:participant_mark_absent' participant.pk %}" class="btn btn-outline-warning" title="Abwesenheit bearbeiten">
-                                                <i class="bi bi-person-x"></i>
-                                            </a>
+                                {% if participant_management_locked %}
+                                    <td>
+                                        {% for start, end in participant.attendance_periods %}
+                                            <div>{{ start|date:"H:i" }}–{{ end|date:"H:i" }}</div>
+                                        {% empty %}
+                                            <span class="text-muted">Keine Anwesenheit erfasst</span>
+                                        {% endfor %}
+                                    </td>
+                                {% else %}
+                                    <td>
+                                        <span class="badge bg-{% if participant.status == 'CANCELLED' %}danger{% elif participant.status == 'ABSENT' or participant.status == 'SUBSTITUTE_PROPOSED' %}warning{% else %}secondary{% endif %}">
+                                            {{ participant.get_status_display }}
+                                        </span>
+                                        {% if participant.status == 'ABSENT' and participant.substitute_membership %}
+                                            <div class="small mt-1">
+                                                <i class="bi bi-arrow-right"></i>
+                                                {{ participant.substitute_name_for_display }}
+                                            </div>
                                         {% endif %}
-                                        {% if user_can_manage_participant_substitutes and participant.substitute_membership %}
-                                            <form method="post" action="{% url 'participants:participant_remove_substitute' participant.pk %}" class="d-inline">
-                                                {% csrf_token %}
-                                                <button type="submit" class="btn btn-outline-danger" title="Ersatzmitglied entfernen">
-                                                    <i class="bi bi-person-dash"></i>
-                                                </button>
-                                            </form>
+                                    </td>
+                                    <td>
+                                        {{ participant.get_participant_type_display }}
+                                    </td>
+                                    <td>
+                                        {% if participant.last_notified_at %}
+                                            {{ participant.last_notified_at|date:"d.m.Y H:i" }}
+                                        {% else %}
+                                            <span class="text-muted">Noch nicht versendet</span>
                                         {% endif %}
-                                        {% if user_can_mark_participant_absent and not participant.substitute_membership %}
-                                            {% if participant.status == 'ABSENT' or participant.status == 'SUBSTITUTE_PROPOSED' %}
-                                                <form method="post" action="{% url 'participants:participant_remove_absence' participant.pk %}" class="d-inline">
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            {% if user_can_mark_participant_absent and participant.status != 'CANCELLED' %}
+                                                <a href="{% url 'participants:participant_mark_absent' participant.pk %}" class="btn btn-outline-warning" title="Abwesenheit bearbeiten">
+                                                    <i class="bi bi-person-x"></i>
+                                                </a>
+                                            {% endif %}
+                                            {% if user_can_manage_participant_substitutes and participant.substitute_membership %}
+                                                <form method="post" action="{% url 'participants:participant_remove_substitute' participant.pk %}" class="d-inline">
                                                     {% csrf_token %}
-                                                    <button type="submit" class="btn btn-outline-success" title="Abwesenheit entfernen">
-                                                        <i class="bi bi-person-check"></i>
+                                                    <button type="submit" class="btn btn-outline-danger" title="Ersatzmitglied entfernen">
+                                                        <i class="bi bi-person-dash"></i>
                                                     </button>
                                                 </form>
                                             {% endif %}
-                                        {% endif %}
-                                    </div>
-                                </td>
+                                            {% if user_can_mark_participant_absent and not participant.substitute_membership %}
+                                                {% if participant.status == 'ABSENT' or participant.status == 'SUBSTITUTE_PROPOSED' %}
+                                                    <form method="post" action="{% url 'participants:participant_remove_absence' participant.pk %}" class="d-inline">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-outline-success" title="Abwesenheit entfernen">
+                                                            <i class="bi bi-person-check"></i>
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                {% endif %}
                             </tr>
                         {% endfor %}
                     </tbody>

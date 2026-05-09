@@ -46,6 +46,18 @@
                                 <i class="bi bi-file-earmark-check"></i> Beschlüsse
                             </a>
                         </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'elections:election_list' %}">
+                                <i class="bi bi-person-check"></i> Wahlen
+                            </a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'protocols:protocol_list' %}">
+                                <i class="bi bi-journal-text"></i> Protokolle
+                            </a>
+                        </li>
                         
                         <!-- Verwaltung Dropdown (nur für Admins) -->
                         {% can_manage_email_templates user as can_manage_templates %}

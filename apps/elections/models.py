@@ -2,8 +2,10 @@
 
 import uuid
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from apps.agendas.models import AgendaItem
 
@@ -30,9 +32,11 @@ class Election(models.Model):
 
     STATUS_DRAFT = 'DRAFT'
     STATUS_PUBLISHED = 'PUBLISHED'
+    STATUS_COMPLETED = 'COMPLETED'
     STATUS_CHOICES = [
         (STATUS_DRAFT, 'Entwurf'),
         (STATUS_PUBLISHED, 'Veröffentlicht'),
+        (STATUS_COMPLETED, 'Durchgeführt'),
     ]
 
     id = models.UUIDField(
@@ -117,7 +121,7 @@ class Election(models.Model):
                 'status': 'Eine veröffentlichte Wahl muss zuerst als Entwurf mit Kandidierenden angelegt werden.'
             })
 
-        if self.status == self.STATUS_PUBLISHED and not self._state.adding and not self.candidates.exists():
+        if self.status in [self.STATUS_PUBLISHED, self.STATUS_COMPLETED] and not self._state.adding and not self.candidates.exists():
             raise ValidationError({
                 'status': 'Eine Wahl kann nur mit mindestens einer kandidierenden Person veröffentlicht werden.'
             })
@@ -126,7 +130,7 @@ class Election(models.Model):
         """Save election while preserving published elections as read-only."""
         if not self._state.adding:
             original = Election.objects.get(pk=self.pk)
-            if original.status == self.STATUS_PUBLISHED and self._has_changed_since_publish(original):
+            if original.status in [self.STATUS_PUBLISHED, self.STATUS_COMPLETED] and self._has_changed_since_publish(original):
                 raise ValidationError('Veröffentlichte Wahlen können nicht mehr bearbeitet werden.')
 
         self.full_clean()
@@ -134,7 +138,7 @@ class Election(models.Model):
 
     def delete(self, *args, **kwargs):
         """Delete election by deleting its agenda item."""
-        if self.status == self.STATUS_PUBLISHED:
+        if self.status in [self.STATUS_PUBLISHED, self.STATUS_COMPLETED]:
             raise ValidationError('Veröffentlichte Wahlen können nicht gelöscht werden.')
         if self.agenda_item_id:
             return self.agenda_item.delete(*args, **kwargs)
@@ -169,7 +173,7 @@ class Election(models.Model):
 
     def _has_changed_since_publish(self, original: 'Election') -> bool:
         """Check if persisted election fields changed after publication."""
-        fields = ['agenda_item_id', 'election_type', 'majority_type', 'status']
+        fields = ['agenda_item_id', 'election_type', 'majority_type']
         return any(getattr(self, field) != getattr(original, field) for field in fields)
 
 
@@ -235,3 +239,78 @@ class ElectionCandidate(models.Model):
         if self.election.status == Election.STATUS_PUBLISHED:
             raise ValidationError('Kandidierende Personen veröffentlichter Wahlen können nicht gelöscht werden.')
         return super().delete(*args, **kwargs)
+
+
+class ElectionResult(models.Model):
+    """Recorded result for a published election."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    election = models.OneToOneField(
+        Election,
+        on_delete=models.CASCADE,
+        related_name='result',
+        verbose_name='Wahl',
+    )
+    is_quorate = models.BooleanField(null=True, blank=True, verbose_name='Beschlussfähig')
+    quorum_manually_overridden = models.BooleanField(
+        default=False,
+        verbose_name='Beschlussfähigkeit manuell überschrieben',
+    )
+    quorum_override_reason = models.TextField(blank=True, verbose_name='Begründung Quorum-Override')
+    eligible_voters = models.PositiveIntegerField(default=0, verbose_name='Stimmberechtigte')
+    votes_cast = models.PositiveIntegerField(default=0, verbose_name='Abgegebene Stimmen')
+    invalid_votes = models.PositiveIntegerField(default=0, verbose_name='Ungültige Stimmen')
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recorded_election_results',
+        verbose_name='Erfasst von',
+    )
+    recorded_at = models.DateTimeField(default=timezone.now, verbose_name='Erfasst am')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Aktualisiert am')
+
+    class Meta:
+        verbose_name = 'Wahlergebnis'
+        verbose_name_plural = 'Wahlergebnisse'
+        ordering = ['-recorded_at']
+
+    def __str__(self) -> str:
+        """Return election result label."""
+        return f'Ergebnis: {self.election.title}'
+
+
+class ElectionCandidateResult(models.Model):
+    """Vote count for one candidate in an election result."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    result = models.ForeignKey(
+        ElectionResult,
+        on_delete=models.CASCADE,
+        related_name='candidate_results',
+        verbose_name='Wahlergebnis',
+    )
+    candidate = models.ForeignKey(
+        ElectionCandidate,
+        on_delete=models.CASCADE,
+        related_name='results',
+        verbose_name='Kandidierende Person',
+    )
+    votes = models.PositiveIntegerField(default=0, verbose_name='Stimmen')
+    elected = models.BooleanField(default=False, verbose_name='Gewählt')
+
+    class Meta:
+        verbose_name = 'Kandidierenden-Ergebnis'
+        verbose_name_plural = 'Kandidierenden-Ergebnisse'
+        ordering = ['candidate__sort_order', 'candidate__name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['result', 'candidate'],
+                name='unique_candidate_result_per_election_result',
+            ),
+        ]
+
+    def __str__(self) -> str:
+        """Return candidate result label."""
+        return f'{self.candidate.name}: {self.votes}'

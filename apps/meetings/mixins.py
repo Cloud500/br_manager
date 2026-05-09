@@ -2,6 +2,7 @@
 
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
+from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
 
 
@@ -59,6 +60,8 @@ class MeetingCreatePermissionMixin(UserPassesTestMixin):
         """Check if user can create meetings."""
         user = self.request.user
         committee = self.get_committee()
+        if getattr(self, '_committee_lookup_failed', False):
+            return False
         
         # Import Meeting model
         from apps.meetings.models import Meeting
@@ -69,12 +72,13 @@ class MeetingCreatePermissionMixin(UserPassesTestMixin):
         """Get committee from request (override in subclass if needed)."""
         from apps.committees.models import Committee
         
+        self._committee_lookup_failed = False
         committee_id = self.request.GET.get('committee') or self.request.POST.get('committee')
         if committee_id:
             try:
                 return Committee.objects.get(pk=committee_id)
-            except Committee.DoesNotExist:
-                pass
+            except (Committee.DoesNotExist, ValidationError, ValueError):
+                self._committee_lookup_failed = True
         return None
     
     def handle_no_permission(self):

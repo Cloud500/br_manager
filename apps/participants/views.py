@@ -37,6 +37,9 @@ class ParticipantAddView(LoginRequiredMixin, FormView):
         if not request.user.is_authenticated:
             return super().dispatch(request, *args, **kwargs)
         meeting = self.get_meeting()
+        if meeting.status == "COMPLETED":
+            messages.error(request, "Teilnehmer können nach Sitzungsabschluss nicht mehr geändert werden.")
+            return redirect("meetings:meeting_detail", pk=meeting.pk)
         if not user_has_participant_permission(
             request.user,
             meeting,
@@ -103,6 +106,14 @@ class ParticipantActionMixin(LoginRequiredMixin, ParticipantPermissionMixin, For
     title = "Teilnehmeraktion"
     submit_label = "Speichern"
     icon_class = "bi-person"
+
+    def dispatch(self, request, *args, **kwargs):
+        """Block participant action forms after meeting completion."""
+        participant = self.get_object()
+        if participant.meeting.status == "COMPLETED":
+            messages.error(request, "Teilnehmer können nach Sitzungsabschluss nicht mehr geändert werden.")
+            return redirect("meetings:meeting_detail", pk=participant.meeting.pk)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_object(self) -> MeetingParticipant:
         """Return the participant addressed by the URL."""
@@ -267,7 +278,11 @@ class ParticipantRemoveSubstituteView(
     def post(self, request, *args, **kwargs):
         """Remove substitute and restore the original participant."""
         participant = self.get_object()
-        remove_substitute(participant, changed_by=request.user)
+        try:
+            remove_substitute(participant, changed_by=request.user)
+        except ValidationError as error:
+            messages.error(request, error.messages[0])
+            return redirect("meetings:meeting_detail", pk=participant.meeting.pk)
         messages.success(
             request,
             f"Ersatzmitglied für {participant.display_name_for_display} wurde entfernt.",

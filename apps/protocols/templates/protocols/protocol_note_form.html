@@ -1,0 +1,24 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block meeting_content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h1 class="h4 mb-0">Protokollnotiz bearbeiten</h1>
+                </div>
+                <div class="card-body">
+                    <p><strong>TOP {{ agenda_item.item_number }}</strong> {{ agenda_item.title }}</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form.as_p }}
+                        <button type="submit" class="btn btn-primary">Speichern</button>
+                        <a href="{% url 'meetings:meeting_live' meeting.pk %}" class="btn btn-outline-secondary">Abbrechen</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

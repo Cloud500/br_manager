@@ -1,0 +1,13 @@
+<div id="live-agenda" class="card shadow-sm" hx-get="{% url 'meetings:meeting_live_agenda' meeting.pk %}" hx-trigger="br-live-refresh-agenda from:body" hx-swap="outerHTML">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h2 class="h5 mb-0">Tagesordnung</h2>
+        <span class="text-muted small">Aktualisiert bei Änderungen</span>
+    </div>
+    <div class="list-group list-group-flush">
+        {% for item in agenda_items %}
+            {% include 'meetings/includes/live_agenda_item.html' with item=item %}
+        {% empty %}
+            <div class="list-group-item text-muted">Keine Tagesordnungspunkte vorhanden.</div>
+        {% endfor %}
+    </div>
+</div>

@@ -50,7 +50,7 @@
                 </a>
             {% endif %}
             
-            {% if meeting.status == 'SENT' %}
+            {% if user_can_start_meeting %}
                 <form method="post" action="{% url 'meetings:meeting_start' meeting.pk %}" class="d-inline">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-warning">
@@ -68,7 +68,31 @@
                 </form>
             {% endif %}
             
-            {% if meeting.can_complete %}
+            {% if user_can_enter_live_meeting %}
+                <a href="{{ live_meeting_url }}" class="btn btn-warning">
+                    <i class="bi bi-broadcast"></i> Live-Sitzung öffnen
+                </a>
+            {% endif %}
+
+            {% if can_view_protocol %}
+                <a href="{% url 'protocols:protocol_detail' protocol.pk %}" class="btn btn-outline-primary">
+                    <i class="bi bi-journal-text"></i> Protokoll öffnen
+                </a>
+            {% endif %}
+
+            {% if meeting_elections %}
+                <a href="#meeting-elections" class="btn btn-outline-secondary">
+                    <i class="bi bi-person-check"></i> Wahlen dieser Sitzung
+                </a>
+            {% endif %}
+
+            {% if meeting_resolutions %}
+                <a href="#meeting-resolutions" class="btn btn-outline-secondary">
+                    <i class="bi bi-file-earmark-check"></i> Beschlüsse dieser Sitzung
+                </a>
+            {% endif %}
+
+            {% if user_can_complete_meeting %}
                 <form method="post" action="{% url 'meetings:meeting_complete' meeting.pk %}" class="d-inline">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success">
@@ -360,6 +384,57 @@
 {% if user_can_reorder_items and meeting.has_agenda and meeting.agenda.is_editable %}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="{% static 'agendas/js/agenda_reorder.js' %}"></script>
+{% endif %}
+
+{% if meeting_elections or meeting_resolutions %}
+<div class="row mb-4">
+    {% if meeting_elections %}
+        <div class="col-lg-6" id="meeting-elections">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-person-check"></i> Wahlen dieser Sitzung</h5>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for election in meeting_elections %}
+                        <a class="list-group-item list-group-item-action" href="{% url 'elections:election_detail' election.pk %}">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <strong>{{ election.agenda_item.item_number }}</strong> {{ election.title }}
+                                    <div class="small text-muted">{{ election.get_election_type_display }}</div>
+                                </div>
+                                <span class="badge text-bg-secondary">{{ election.get_status_display }}</span>
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+    {% if meeting_resolutions %}
+        <div class="col-lg-6" id="meeting-resolutions">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-check"></i> Beschlüsse dieser Sitzung</h5>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for resolution in meeting_resolutions %}
+                        <a class="list-group-item list-group-item-action" href="{% url 'resolutions:resolution_detail' resolution.pk %}">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <strong>{{ resolution.agenda_item.item_number }}</strong> {{ resolution.title }}
+                                    {% if resolution.resolution_number %}
+                                        <div class="small text-muted">{{ resolution.resolution_number }}</div>
+                                    {% endif %}
+                                </div>
+                                <span class="badge text-bg-secondary">{{ resolution.get_status_display }}</span>
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
 {% endif %}
 
 <!-- Teilnehmer -->

@@ -7,6 +7,7 @@ from apps.elections import views
 app_name = 'elections'
 
 urlpatterns = [
+    path('', views.ElectionListView.as_view(), name='election_list'),
     path('<uuid:agenda_id>/add/', views.ElectionCreateView.as_view(), name='election_create'),
     path('<uuid:pk>/', views.ElectionDetailView.as_view(), name='election_detail'),
     path('<uuid:pk>/edit/', views.ElectionUpdateView.as_view(), name='election_update'),

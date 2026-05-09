@@ -43,6 +43,18 @@ class MeetingParticipant(models.Model):
         STATUS_INVITED,
     ]
 
+    ATTENDANCE_NOT_CONFIRMED = "NOT_CONFIRMED"
+    ATTENDANCE_PRESENT = "PRESENT"
+    ATTENDANCE_LEFT = "LEFT"
+    ATTENDANCE_ABSENT = "ABSENT"
+
+    ATTENDANCE_STATUS_CHOICES = [
+        (ATTENDANCE_NOT_CONFIRMED, "Nicht bestätigt"),
+        (ATTENDANCE_PRESENT, "Anwesend"),
+        (ATTENDANCE_LEFT, "Abwesend während der Sitzung"),
+        (ATTENDANCE_ABSENT, "Abwesend"),
+    ]
+
     id = models.UUIDField(
         primary_key=True,
         default=uuid.uuid4,
@@ -98,6 +110,22 @@ class MeetingParticipant(models.Model):
         blank=True,
         verbose_name="Einladung versendet am",
     )
+    attendance_status = models.CharField(
+        max_length=30,
+        choices=ATTENDANCE_STATUS_CHOICES,
+        default=ATTENDANCE_NOT_CONFIRMED,
+        verbose_name="Anwesenheitsstatus",
+    )
+    last_attendance_event_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Letzte Anwesenheitsänderung",
+    )
+    last_self_confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Zuletzt selbst bestätigt",
+    )
     last_notified_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -129,6 +157,7 @@ class MeetingParticipant(models.Model):
         ]
         indexes = [
             models.Index(fields=["meeting", "status"]),
+            models.Index(fields=["meeting", "attendance_status"]),
         ]
 
     def __str__(self) -> str:
@@ -227,3 +256,77 @@ class MeetingParticipant(models.Model):
         if membership.member_type == "SUBSTITUTE":
             return cls.PARTICIPANT_TYPE_SUBSTITUTE
         return cls.PARTICIPANT_TYPE_INTERNAL
+
+
+class MeetingAttendanceEvent(models.Model):
+    """Append-only attendance event for a meeting participant."""
+
+    EVENT_CONFIRMED_PRESENT = "CONFIRMED_PRESENT"
+    EVENT_RECONFIRMED = "RECONFIRMED"
+    EVENT_LEFT = "LEFT"
+    EVENT_RETURNED = "RETURNED"
+    EVENT_MARKED_ABSENT = "MARKED_ABSENT"
+
+    EVENT_TYPE_CHOICES = [
+        (EVENT_CONFIRMED_PRESENT, "Anwesenheit bestätigt"),
+        (EVENT_RECONFIRMED, "Sitzung erneut bestätigt"),
+        (EVENT_LEFT, "Abwesend gemeldet"),
+        (EVENT_RETURNED, "Zurückgemeldet"),
+        (EVENT_MARKED_ABSENT, "Abwesend markiert"),
+    ]
+
+    METHOD_SELF = "SELF"
+    METHOD_TOTP = "TOTP"
+    METHOD_RECOVERY = "RECOVERY"
+    METHOD_SYSTEM = "SYSTEM"
+
+    METHOD_CHOICES = [
+        (METHOD_SELF, "Selbst"),
+        (METHOD_TOTP, "TOTP"),
+        (METHOD_RECOVERY, "Recovery-Code"),
+        (METHOD_SYSTEM, "System"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    meeting = models.ForeignKey(
+        "meetings.Meeting",
+        on_delete=models.CASCADE,
+        related_name="attendance_events",
+        verbose_name="Sitzung",
+    )
+    participant = models.ForeignKey(
+        MeetingParticipant,
+        on_delete=models.CASCADE,
+        related_name="attendance_events",
+        verbose_name="Teilnehmer",
+    )
+    actor = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="meeting_attendance_events",
+        verbose_name="Akteur",
+    )
+    event_type = models.CharField(max_length=40, choices=EVENT_TYPE_CHOICES, verbose_name="Ereignis")
+    occurred_at = models.DateTimeField(default=timezone.now, verbose_name="Zeitpunkt")
+    method = models.CharField(
+        max_length=20,
+        choices=METHOD_CHOICES,
+        default=METHOD_SELF,
+        verbose_name="Methode",
+    )
+    metadata = models.JSONField(default=dict, blank=True, verbose_name="Metadaten")
+
+    class Meta:
+        verbose_name = "Anwesenheitsereignis"
+        verbose_name_plural = "Anwesenheitsereignisse"
+        ordering = ["occurred_at", "id"]
+        indexes = [
+            models.Index(fields=["meeting", "occurred_at"]),
+            models.Index(fields=["participant", "event_type"]),
+        ]
+
+    def __str__(self) -> str:
+        """Return attendance event label."""
+        return f"{self.participant.display_name_for_display}: {self.get_event_type_display()}"

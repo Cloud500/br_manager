@@ -19,6 +19,7 @@ urlpatterns = [
     path("meetings/", include("apps.meetings.urls", namespace="meetings")),
     path("participants/", include("apps.participants.urls", namespace="participants")),
     path("agendas/", include("apps.agendas.urls", namespace="agendas")),
+    path("protocols/", include("apps.protocols.urls", namespace="protocols")),
     path("elections/", include("apps.elections.urls", namespace="elections")),
     path("resolutions/", include("apps.resolutions.urls", namespace="resolutions")),
     path("email-templates/", include("apps.email_templates.urls", namespace="email_templates")),

@@ -8,12 +8,44 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
-from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
+from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
 
 from apps.agendas.models import Agenda
+from apps.committees.models import Membership
 from apps.elections.forms import ElectionCandidateFormSetFactory, ElectionForm
 from apps.elections.mixins import ElectionPermissionMixin
 from apps.elections.models import Election
+
+
+class ElectionListView(LoginRequiredMixin, ListView):
+    """Display elections visible to the current user."""
+
+    model = Election
+    template_name = 'elections/election_list.html'
+    context_object_name = 'elections'
+    paginate_by = 25
+
+    def get_queryset(self):
+        """Return elections from committees where the user can view elections."""
+        queryset = (
+            Election.objects.select_related('agenda_item__agenda__meeting__committee')
+            .prefetch_related('candidates', 'result__candidate_results__candidate')
+            .order_by(
+                '-agenda_item__agenda__meeting__date',
+                'agenda_item__agenda__meeting__meeting_number',
+                'agenda_item__sort_order',
+            )
+        )
+        user = self.request.user
+        if user.is_superuser or user.is_staff:
+            return queryset
+
+        visible_committee_ids = Membership.objects.filter(
+            user=user,
+            is_active=True,
+            role__permissions__codename='election.view',
+        ).values('committee_id')
+        return queryset.filter(agenda_item__agenda__meeting__committee_id__in=visible_committee_ids).distinct()
 
 
 class ElectionCreateView(LoginRequiredMixin, ElectionPermissionMixin, CreateView):
@@ -27,6 +59,17 @@ class ElectionCreateView(LoginRequiredMixin, ElectionPermissionMixin, CreateView
     def get_agenda(self) -> Agenda:
         """Get agenda from URL."""
         return get_object_or_404(Agenda, pk=self.kwargs['agenda_id'])
+
+    def dispatch(self, request, *args, **kwargs):
+        """Block election creation when the meeting agenda is locked."""
+        agenda = self.get_agenda()
+        if not agenda.is_editable:
+            messages.error(
+                request,
+                f'Tagesordnung kann nicht bearbeitet werden. Sitzungsstatus: {agenda.meeting.get_status_display()}'
+            )
+            return redirect('meetings:meeting_detail', pk=agenda.meeting.pk)
+        return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self) -> Dict[str, Any]:
         """Pass agenda into election form."""
@@ -96,6 +139,7 @@ class ElectionDetailView(LoginRequiredMixin, ElectionPermissionMixin, DetailView
         context['can_edit'] = self.object.is_editable and self._has_permission('election.edit')
         context['can_delete'] = self.object.is_deletable and self._has_permission('election.delete')
         context['can_publish'] = self.object.is_publishable and self._has_permission('election.edit')
+        context['result'] = getattr(self.object, 'result', None)
         return context
 
     def _has_permission(self, permission_codename: str) -> bool:

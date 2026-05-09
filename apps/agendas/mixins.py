@@ -131,6 +131,9 @@ class AgendaPermissionMixin(UserPassesTestMixin):
     
     def handle_no_permission(self):
         """Handle case when user lacks permission."""
+        if not self.request.user.is_authenticated:
+            return super().handle_no_permission()
+
         messages.error(
             self.request,
             'Sie haben keine Berechtigung für diese Aktion.'

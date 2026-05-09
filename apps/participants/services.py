@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
@@ -13,7 +14,7 @@ from django.utils import timezone
 from apps.committees.models import Membership
 from apps.email_templates.models import EmailTemplate, RenderedEmail
 from apps.meetings.models import Meeting
-from apps.participants.models import MeetingParticipant
+from apps.participants.models import MeetingAttendanceEvent, MeetingParticipant
 
 
 class ParticipantAction:
@@ -41,7 +42,276 @@ def participant_snapshot(participant: MeetingParticipant) -> dict:
         ),
         "invite_sent_at": participant.invite_sent_at.isoformat() if participant.invite_sent_at else "",
         "last_notified_at": participant.last_notified_at.isoformat() if participant.last_notified_at else "",
+        "attendance_status": participant.attendance_status,
+        "last_attendance_event_at": (
+            participant.last_attendance_event_at.isoformat()
+            if participant.last_attendance_event_at
+            else ""
+        ),
     }
+
+
+def loaded_participant_for_user(meeting: Meeting, user) -> MeetingParticipant | None:
+    """Return the participant row that loads the user into the meeting."""
+    if not getattr(user, "is_authenticated", False):
+        return None
+    participants = meeting.participants.exclude(status=MeetingParticipant.STATUS_CANCELLED).select_related(
+        "meeting",
+        "membership",
+        "membership__user",
+        "substitute_membership",
+        "substitute_membership__user",
+    )
+    substitute_participant = participants.filter(
+        status=MeetingParticipant.STATUS_ABSENT,
+        substitute_membership__user=user,
+    ).first()
+    if substitute_participant:
+        return substitute_participant
+    return participants.filter(
+        status__in=MeetingParticipant.ACTIVE_STATUSES,
+        membership__user=user,
+        substitute_membership__isnull=True,
+    ).first()
+
+
+def user_is_loaded_participant(meeting: Meeting, user) -> bool:
+    """Return whether the user is loaded into the meeting as participant/substitute."""
+    return loaded_participant_for_user(meeting, user) is not None
+
+
+@transaction.atomic
+def confirm_presence(meeting: Meeting, user, method: str = MeetingAttendanceEvent.METHOD_SELF) -> MeetingParticipant:
+    """Mark the current user present for the in-progress meeting."""
+    participant = _get_loaded_participant_or_raise(meeting, user)
+    if meeting.status != "IN_PROGRESS":
+        raise ValidationError("Anwesenheit kann nur während einer laufenden Sitzung bestätigt werden.")
+    _record_attendance_event(
+        participant=participant,
+        actor=user,
+        event_type=MeetingAttendanceEvent.EVENT_CONFIRMED_PRESENT,
+        attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
+        method=method,
+        set_self_confirmed=True,
+    )
+    return participant
+
+
+@transaction.atomic
+def reconfirm_presence(
+    meeting: Meeting,
+    user,
+    *,
+    password: str,
+    code: str = "",
+    use_recovery: bool = False,
+) -> MeetingParticipant:
+    """Re-confirm a loaded participant with password and 2FA when enabled."""
+    participant = _get_loaded_participant_or_raise(meeting, user)
+    if meeting.status != "IN_PROGRESS":
+        raise ValidationError("Sitzungen können nur während einer laufenden Sitzung bestätigt werden.")
+    if not authenticate(username=user.email, password=password):
+        raise ValidationError("Passwort oder Bestätigungscode ist ungültig.")
+
+    method = MeetingAttendanceEvent.METHOD_SELF
+    if user.two_factor_enabled:
+        if not code:
+            raise ValidationError("Bitte geben Sie den 2FA-Code ein.")
+        from apps.accounts.twofa_utils import verify_recovery_code, verify_totp_code
+
+        if use_recovery:
+            if not verify_recovery_code(user, code):
+                raise ValidationError("Recovery-Code ist ungültig.")
+            method = MeetingAttendanceEvent.METHOD_RECOVERY
+        else:
+            if not verify_totp_code(user, code):
+                raise ValidationError("2FA-Code ist ungültig.")
+            method = MeetingAttendanceEvent.METHOD_TOTP
+
+    _record_attendance_event(
+        participant=participant,
+        actor=user,
+        event_type=MeetingAttendanceEvent.EVENT_RECONFIRMED,
+        attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
+        method=method,
+        set_self_confirmed=True,
+    )
+    return participant
+
+
+@transaction.atomic
+def mark_self_left(meeting: Meeting, user) -> MeetingParticipant:
+    """Mark the current loaded participant as temporarily absent."""
+    participant = _get_loaded_participant_or_raise(meeting, user)
+    if meeting.status != "IN_PROGRESS":
+        raise ValidationError("Abwesenheit kann nur während einer laufenden Sitzung gesetzt werden.")
+    _ensure_self_confirmed(participant)
+    _record_attendance_event(
+        participant=participant,
+        actor=user,
+        event_type=MeetingAttendanceEvent.EVENT_LEFT,
+        attendance_status=MeetingParticipant.ATTENDANCE_LEFT,
+        method=MeetingAttendanceEvent.METHOD_SELF,
+    )
+    return participant
+
+
+@transaction.atomic
+def mark_self_returned(meeting: Meeting, user) -> MeetingParticipant:
+    """Mark the current loaded participant as present again."""
+    participant = _get_loaded_participant_or_raise(meeting, user)
+    if meeting.status != "IN_PROGRESS":
+        raise ValidationError("Rückkehr kann nur während einer laufenden Sitzung gesetzt werden.")
+    _ensure_self_confirmed(participant)
+    _record_attendance_event(
+        participant=participant,
+        actor=user,
+        event_type=MeetingAttendanceEvent.EVENT_RETURNED,
+        attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
+        method=MeetingAttendanceEvent.METHOD_SELF,
+    )
+    return participant
+
+
+def current_voting_participants(meeting: Meeting):
+    """Return participants currently marked present for quorum snapshots."""
+    return meeting.participants.filter(
+        attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
+    ).exclude(
+        participant_type=MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL,
+    ).filter(
+        Q(
+            status__in=MeetingParticipant.ACTIVE_STATUSES,
+            substitute_membership__isnull=True,
+            membership__committee=meeting.committee,
+            membership__member_type="REGULAR",
+            membership__is_active=True,
+        )
+        | Q(
+            status=MeetingParticipant.STATUS_ABSENT,
+            substitute_membership__isnull=False,
+            substitute_membership__committee=meeting.committee,
+            substitute_membership__member_type="SUBSTITUTE",
+            substitute_membership__is_active=True,
+        )
+    )
+
+
+def _reset_attendance_confirmation(participant: MeetingParticipant) -> None:
+    """Clear row-level live presence after the loaded voting identity changes."""
+    participant.attendance_status = MeetingParticipant.ATTENDANCE_NOT_CONFIRMED
+    participant.last_self_confirmed_at = None
+    participant.last_attendance_event_at = None
+
+
+def attendance_timeline_for_meeting(meeting: Meeting) -> list[dict]:
+    """Return serialized attendance events for protocol snapshots."""
+    events = meeting.attendance_events.select_related(
+        "participant",
+        "participant__membership",
+        "participant__membership__user",
+        "actor",
+    ).order_by("occurred_at", "id")
+    return [
+        {
+            "participant_id": str(event.participant_id),
+            "participant_name": event.participant.display_name_for_display,
+            "event_type": event.event_type,
+            "occurred_at": event.occurred_at.isoformat(),
+            "method": event.method,
+            "actor_id": str(event.actor_id) if event.actor_id else "",
+        }
+        for event in events
+    ]
+
+
+def attendance_periods_by_participant(meeting: Meeting) -> dict:
+    """Return present intervals keyed by participant id for completed meeting summaries."""
+    events = meeting.attendance_events.select_related("participant").order_by("occurred_at", "id")
+    active_starts = {}
+    periods = {}
+    for event in events:
+        participant_id = event.participant_id
+        if event.event_type in [
+            MeetingAttendanceEvent.EVENT_CONFIRMED_PRESENT,
+            MeetingAttendanceEvent.EVENT_RECONFIRMED,
+            MeetingAttendanceEvent.EVENT_RETURNED,
+        ]:
+            active_starts.setdefault(participant_id, event.occurred_at)
+        elif event.event_type in [
+            MeetingAttendanceEvent.EVENT_LEFT,
+            MeetingAttendanceEvent.EVENT_MARKED_ABSENT,
+        ]:
+            start = active_starts.pop(participant_id, None)
+            if start:
+                periods.setdefault(participant_id, []).append((start, event.occurred_at))
+
+    end = meeting.actual_end_time or timezone.now()
+    for participant_id, start in active_starts.items():
+        periods.setdefault(participant_id, []).append((start, end))
+    return periods
+
+
+def _get_loaded_participant_or_raise(meeting: Meeting, user) -> MeetingParticipant:
+    """Return loaded participant or raise a validation error."""
+    participant = loaded_participant_for_user(meeting, user)
+    if not participant:
+        raise ValidationError("Sie sind für diese Sitzung nicht geladen.")
+    return participant
+
+
+def _ensure_self_confirmed(participant: MeetingParticipant) -> None:
+    """Require meeting-scoped re-confirmation before self-service attendance changes."""
+    if not participant.last_self_confirmed_at:
+        raise ValidationError("Bitte bestätigen Sie die Sitzung zuerst erneut.")
+
+
+def _ensure_participant_planning_open(meeting: Meeting) -> None:
+    """Block participant planning mutations after a meeting has been completed."""
+    if meeting.status == "COMPLETED":
+        raise ValidationError("Teilnehmer können nach Sitzungsabschluss nicht mehr geändert werden.")
+
+
+def _record_attendance_event(
+    *,
+    participant: MeetingParticipant,
+    actor,
+    event_type: str,
+    attendance_status: str,
+    method: str,
+    set_self_confirmed: bool = False,
+) -> MeetingAttendanceEvent:
+    """Persist one attendance event and denormalize current status."""
+    event = MeetingAttendanceEvent.objects.create(
+        meeting=participant.meeting,
+        participant=participant,
+        actor=actor if getattr(actor, "is_authenticated", False) else None,
+        event_type=event_type,
+        method=method,
+    )
+    participant.attendance_status = attendance_status
+    participant.last_attendance_event_at = event.occurred_at
+    update_fields = ["attendance_status", "last_attendance_event_at", "updated_at"]
+    if set_self_confirmed:
+        participant.last_self_confirmed_at = event.occurred_at
+        update_fields.append("last_self_confirmed_at")
+    participant.save(update_fields=update_fields)
+    from apps.audit.models import AuditEntry
+    from apps.audit.services import create_audit_entry
+
+    create_audit_entry(
+        target=participant,
+        action=AuditEntry.ACTION_UPDATED,
+        change_type="attendance_event",
+        actor=actor,
+        new_snapshot={
+            "event_type": event_type,
+            "attendance_status": attendance_status,
+            "occurred_at": event.occurred_at.isoformat(),
+            "method": method,
+        },
+    )
+    return event
 
 
 def log_participant_change(
@@ -89,6 +359,7 @@ def add_participant(
     changed_by=None,
 ) -> MeetingParticipant:
     """Add an additional participant to a meeting."""
+    _ensure_participant_planning_open(meeting)
     _validate_additional_membership(meeting, membership)
     participant, created = MeetingParticipant.objects.get_or_create(
         meeting=meeting,
@@ -390,6 +661,7 @@ def mark_absent(
     changed_by=None,
 ) -> Membership | None:
     """Mark absence and optionally apply a meeting-scoped substitute."""
+    _ensure_participant_planning_open(participant.meeting)
     if participant.status in [
         MeetingParticipant.STATUS_CANCELLED,
     ]:
@@ -419,11 +691,15 @@ def mark_absent(
         )
         participant.substitute_membership = None
         participant.status = MeetingParticipant.STATUS_ABSENT
+        _reset_attendance_confirmation(participant)
         participant.save(update_fields=[
             "absence_reason",
             "nachladefaehig",
             "substitute_membership",
             "status",
+            "attendance_status",
+            "last_self_confirmed_at",
+            "last_attendance_event_at",
             "updated_at",
         ])
         return None
@@ -450,22 +726,30 @@ def mark_absent(
     if previous_substitute:
         participant.substitute_membership = previous_substitute
         participant.status = MeetingParticipant.STATUS_ABSENT
+        _reset_attendance_confirmation(participant)
         participant.save(update_fields=[
             "absence_reason",
             "nachladefaehig",
             "substitute_membership",
             "status",
+            "attendance_status",
+            "last_self_confirmed_at",
+            "last_attendance_event_at",
             "updated_at",
         ])
         return previous_substitute
 
     participant.substitute_membership = None
     participant.status = MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
+    _reset_attendance_confirmation(participant)
     participant.save(update_fields=[
         "absence_reason",
         "nachladefaehig",
         "substitute_membership",
         "status",
+        "attendance_status",
+        "last_self_confirmed_at",
+        "last_attendance_event_at",
         "updated_at",
     ])
 
@@ -478,6 +762,7 @@ def remove_absence(
     changed_by=None,
 ) -> None:
     """Remove an absence without a selected substitute and restore the participant."""
+    _ensure_participant_planning_open(participant.meeting)
     if participant.substitute_membership_id:
         raise ValidationError("Bitte entfernen Sie zuerst das Ersatzmitglied.")
     if participant.status not in [
@@ -494,10 +779,14 @@ def remove_absence(
         if participant.meeting.sent_at or participant.invite_sent_at
         else MeetingParticipant.STATUS_CREATED
     )
+    _reset_attendance_confirmation(participant)
     participant.save(update_fields=[
         "absence_reason",
         "nachladefaehig",
         "status",
+        "attendance_status",
+        "last_self_confirmed_at",
+        "last_attendance_event_at",
         "updated_at",
     ])
     log_participant_change(
@@ -517,6 +806,7 @@ def remove_substitute(
     changed_by=None,
 ) -> None:
     """Remove the selected substitute and restore the original participant."""
+    _ensure_participant_planning_open(participant.meeting)
     if not participant.substitute_membership_id:
         return
 
@@ -528,11 +818,15 @@ def remove_substitute(
         if participant.meeting.sent_at or participant.invite_sent_at
         else MeetingParticipant.STATUS_CREATED
     )
+    _reset_attendance_confirmation(participant)
     participant.save(update_fields=[
         "substitute_membership",
         "absence_reason",
         "nachladefaehig",
         "status",
+        "attendance_status",
+        "last_self_confirmed_at",
+        "last_attendance_event_at",
         "updated_at",
     ])
     if _meeting_invitations_are_active(participant.meeting):
@@ -548,13 +842,18 @@ def confirm_substitute(
     changed_by=None,
 ) -> Membership:
     """Confirm a substitute on the existing participant row only."""
+    _ensure_participant_planning_open(participant.meeting)
     if participant.substitute_membership_id == substitute_membership.id:
         participant.status = MeetingParticipant.STATUS_ABSENT
         participant.nachladefaehig = True
+        _reset_attendance_confirmation(participant)
         participant.save(update_fields=[
             "absence_reason",
             "status",
             "nachladefaehig",
+            "attendance_status",
+            "last_self_confirmed_at",
+            "last_attendance_event_at",
             "updated_at",
         ])
         return substitute_membership
@@ -576,11 +875,15 @@ def confirm_substitute(
     participant.status = MeetingParticipant.STATUS_ABSENT
     participant.nachladefaehig = True
     participant.substitute_membership = substitute_membership
+    _reset_attendance_confirmation(participant)
     participant.save(update_fields=[
         "absence_reason",
         "status",
         "nachladefaehig",
         "substitute_membership",
+        "attendance_status",
+        "last_self_confirmed_at",
+        "last_attendance_event_at",
         "updated_at",
     ])
 

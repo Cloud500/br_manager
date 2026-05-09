@@ -2,6 +2,8 @@
 
 from django import forms
 
+from apps.protocols.forms import sanitize_protocol_note_html
+
 from apps.meetings.models import Meeting
 
 
@@ -225,3 +227,92 @@ class MeetingSendInvitationForm(forms.Form):
         label='Zusätzliche Nachricht',
         help_text='Optional: Fügen Sie eine persönliche Nachricht zur Einladung hinzu'
     )
+
+
+class ResolutionResultForm(forms.Form):
+    """Inline form for recording a resolution result during a live meeting."""
+
+    yes_votes = forms.IntegerField(
+        min_value=0,
+        label='Dafür',
+        widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': 0}),
+    )
+    no_votes = forms.IntegerField(
+        min_value=0,
+        label='Dagegen',
+        widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': 0}),
+    )
+    abstentions = forms.IntegerField(
+        min_value=0,
+        label='Enthaltungen',
+        widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': 0}),
+    )
+    decision_text = forms.CharField(
+        required=False,
+        label='Beschlussfassung',
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
+    )
+    is_quorate = forms.BooleanField(
+        required=False,
+        label='Beschlussfähig',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+
+    def __init__(self, *args, quorum_suggestion: bool = False, **kwargs):
+        """Initialize default quorum proposal."""
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            self.initial['is_quorate'] = quorum_suggestion
+
+    def clean_decision_text(self):
+        """Sanitize formatted resolution decision text before storing it."""
+        return sanitize_protocol_note_html(self.cleaned_data.get('decision_text', ''))
+
+
+class ElectionResultForm(forms.Form):
+    """Inline form for recording a candidate election result during a live meeting."""
+
+    invalid_votes = forms.IntegerField(
+        min_value=0,
+        initial=0,
+        label='Ungültige Stimmen',
+        widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': 0}),
+    )
+    is_quorate = forms.BooleanField(
+        required=False,
+        label='Beschlussfähig',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+    def __init__(self, *args, candidates=None, quorum_suggestion: bool = False, **kwargs):
+        """Add one vote and elected field per candidate."""
+        super().__init__(*args, **kwargs)
+        self.candidates = list(candidates or [])
+        if not self.is_bound:
+            self.initial['is_quorate'] = quorum_suggestion
+        for candidate in self.candidates:
+            self.fields[f'candidate_{candidate.pk}'] = forms.IntegerField(
+                min_value=0,
+                initial=0,
+                label=candidate.name,
+                widget=forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'min': 0}),
+            )
+            self.fields[f'elected_{candidate.pk}'] = forms.BooleanField(
+                required=False,
+                label='gewählt',
+                widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            )
+
+    def candidate_votes(self) -> dict:
+        """Return candidate vote counts keyed by candidate id."""
+        return {
+            candidate.pk: self.cleaned_data[f'candidate_{candidate.pk}']
+            for candidate in self.candidates
+        }
+
+    def elected_candidate_ids(self) -> set:
+        """Return selected elected candidate ids."""
+        return {
+            candidate.pk
+            for candidate in self.candidates
+            if self.cleaned_data.get(f'elected_{candidate.pk}')
+        }

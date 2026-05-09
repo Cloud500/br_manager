@@ -14,13 +14,19 @@ from apps.committees.models import Committee, Membership
 from apps.email_templates.models import EmailTemplate
 from apps.meetings.models import Meeting
 from apps.participants.models import MeetingParticipant
+from apps.participants.models import MeetingAttendanceEvent
 from apps.participants.forms import AddParticipantForm
 from apps.participants.mixins import user_has_participant_permission
 from apps.participants.services import (
     add_participant,
     available_substitutes_for_participant,
+    confirm_presence,
     confirm_substitute,
+    current_voting_participants,
+    mark_self_left,
+    mark_self_returned,
     mark_absent,
+    reconfirm_presence,
     remove_absence,
     remove_substitute,
     send_meeting_invitations,
@@ -193,6 +199,30 @@ class ParticipantsTestCase(TestCase):
             created_by=self.created_by,
         )
 
+    def test_mark_absent_page_shows_absent_participant_election_data(self):
+        """The absent participant card includes list, position and vote data."""
+        self.regular_membership.election_list_name = "Liste A"
+        self.regular_membership.election_list_position = 4
+        self.regular_membership.election_votes = 123
+        self.regular_membership.save(update_fields=[
+            "election_list_name",
+            "election_list_position",
+            "election_votes",
+        ])
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting,
+            membership=self.regular_membership,
+        )
+        self.client.force_login(self.helper)
+
+        response = self.client.get(reverse("participants:participant_mark_absent", args=[participant.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Abwesender Teilnehmer")
+        self.assertContains(response, "Liste A")
+        self.assertContains(response, "4")
+        self.assertContains(response, "123")
+
     def test_meeting_initializes_regular_and_external_only(self):
         committee = Committee.objects.create(name="BR-Init", committee_type="MAIN", total_seats=5)
         regular = User.objects.create_user(email="init-regular@example.com", password="testpass123", first_name="Init", last_name="Regular", gender="M")
@@ -220,6 +250,94 @@ class ParticipantsTestCase(TestCase):
         self.assertEqual(len(mail.outbox), 0)
         for participant in participants:
             self.assertEqual(participant.role_for_display, self.role_viewer.name)
+
+    def test_confirm_presence_records_attendance_event(self):
+        """Loaded users can explicitly confirm presence during a running meeting."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+
+        participant = confirm_presence(self.meeting, self.regular)
+
+        participant.refresh_from_db()
+        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT)
+        self.assertIsNotNone(participant.last_self_confirmed_at)
+        event = MeetingAttendanceEvent.objects.get(participant=participant)
+        self.assertEqual(event.event_type, MeetingAttendanceEvent.EVENT_CONFIRMED_PRESENT)
+        self.assertEqual(event.actor, self.regular)
+
+    def test_self_absence_and_return_update_current_voting_participants(self):
+        """Self-service absence removes and return restores current voting presence."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+        participant = confirm_presence(self.meeting, self.regular)
+
+        mark_self_left(self.meeting, self.regular)
+        participant.refresh_from_db()
+        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_LEFT)
+        self.assertNotIn(participant, current_voting_participants(self.meeting))
+
+        mark_self_returned(self.meeting, self.regular)
+        participant.refresh_from_db()
+        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT)
+        self.assertIn(participant, current_voting_participants(self.meeting))
+
+    def test_substitute_assignment_resets_stale_attendance_confirmation(self):
+        """Substitutes must confirm themselves before their replacement row counts as voting."""
+        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.regular_membership)
+        participant.status = MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.last_self_confirmed_at = timezone.now()
+        participant.save(update_fields=["status", "attendance_status", "last_self_confirmed_at", "updated_at"])
+
+        confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
+
+        participant.refresh_from_db()
+        self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
+        self.assertEqual(participant.substitute_membership, self.substitute_membership)
+        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_NOT_CONFIRMED)
+        self.assertIsNone(participant.last_self_confirmed_at)
+        self.assertNotIn(participant, current_voting_participants(self.meeting))
+
+    def test_substitute_removal_resets_stale_attendance_confirmation(self):
+        """Removing a substitute must not transfer the substitute's presence to the original member."""
+        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.regular_membership)
+        participant.status = MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
+        participant.save(update_fields=["status", "updated_at"])
+        confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.last_self_confirmed_at = timezone.now()
+        participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+
+        remove_substitute(participant, changed_by=self.helper)
+
+        participant.refresh_from_db()
+        self.assertIsNone(participant.substitute_membership)
+        self.assertIn(participant.status, MeetingParticipant.ACTIVE_STATUSES)
+        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_NOT_CONFIRMED)
+        self.assertIsNone(participant.last_self_confirmed_at)
+        self.assertNotIn(participant, current_voting_participants(self.meeting))
+
+    def test_reconfirm_presence_requires_running_meeting_and_valid_password(self):
+        """Meeting-scoped re-confirmation validates credentials and running status."""
+        with self.assertRaises(ValidationError):
+            reconfirm_presence(self.meeting, self.regular, password="testpass123")
+
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+
+        with self.assertRaises(ValidationError):
+            reconfirm_presence(self.meeting, self.regular, password="wrong")
+
+        participant = reconfirm_presence(self.meeting, self.regular, password="testpass123")
+
+        participant.refresh_from_db()
+        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT)
+        self.assertIsNotNone(participant.last_self_confirmed_at)
+        self.assertTrue(
+            participant.attendance_events.filter(
+                event_type=MeetingAttendanceEvent.EVENT_RECONFIRMED,
+            ).exists()
+        )
 
     def test_add_external_membership_participant_sends_mail_after_meeting_sent(self):
         self.meeting.status = "SENT"

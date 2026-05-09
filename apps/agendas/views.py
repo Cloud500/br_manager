@@ -33,6 +33,19 @@ class AgendaItemCreateView(LoginRequiredMixin, AgendaPermissionMixin, CreateView
     form_class = AgendaItemRegularForm
     template_name = 'agendas/item_form.html'
     required_permission = 'agenda.add_item_regular'
+
+    def dispatch(self, request, *args, **kwargs):
+        """Block create form access when the meeting agenda is locked."""
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        agenda = self.get_agenda()
+        if not agenda.is_editable:
+            messages.error(
+                request,
+                f'Tagesordnung kann nicht bearbeitet werden. Sitzungsstatus: {agenda.meeting.get_status_display()}'
+            )
+            return redirect('meetings:meeting_detail', pk=agenda.meeting.pk)
+        return super().dispatch(request, *args, **kwargs)
     
     def get_agenda(self) -> Agenda:
         """Get agenda from URL parameter."""
@@ -98,6 +111,19 @@ class AgendaItemResolutionCreateView(LoginRequiredMixin, AgendaPermissionMixin, 
     form_class = AgendaItemResolutionForm
     template_name = 'agendas/item_resolution_form.html'
     required_permission = 'agenda.add_item_resolution'
+
+    def dispatch(self, request, *args, **kwargs):
+        """Block create form access when the meeting agenda is locked."""
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        agenda = self.get_agenda()
+        if not agenda.is_editable:
+            messages.error(
+                request,
+                f'Tagesordnung kann nicht bearbeitet werden. Sitzungsstatus: {agenda.meeting.get_status_display()}'
+            )
+            return redirect('meetings:meeting_detail', pk=agenda.meeting.pk)
+        return super().dispatch(request, *args, **kwargs)
     
     def get_agenda(self) -> Agenda:
         """Get agenda from URL parameter."""
@@ -113,8 +139,16 @@ class AgendaItemResolutionCreateView(LoginRequiredMixin, AgendaPermissionMixin, 
     def get_context_data(self, **kwargs) -> Dict[str, Any]:
         """Add agenda to context."""
         context = super().get_context_data(**kwargs)
-        context['agenda'] = self.get_agenda()
+        agenda = self.get_agenda()
+        context['agenda'] = agenda
         context['is_create'] = True
+        from apps.resolutions.models import Resolution
+
+        context['can_create_direct_resolution'] = (
+            agenda.meeting.committee.can_create_resolutions
+            and Resolution.user_can_create(self.request.user, agenda.meeting.committee)
+            and Resolution.user_can_propose(self.request.user, agenda.meeting.committee)
+        )
         return context
     
     def form_valid(self, form):
@@ -163,6 +197,20 @@ class AgendaItemUpdateView(LoginRequiredMixin, AgendaPermissionMixin, UpdateView
     form_class = AgendaItemRegularForm
     template_name = 'agendas/item_form.html'
     required_permission = 'agenda.edit_item_regular'
+
+    def dispatch(self, request, *args, **kwargs):
+        """Block edit form access when the meeting agenda is locked."""
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        self.object = self.get_object()
+        agenda = self.object.agenda
+        if not agenda.is_editable:
+            messages.error(
+                request,
+                f'Tagesordnung kann nicht bearbeitet werden. Sitzungsstatus: {agenda.meeting.get_status_display()}'
+            )
+            return redirect('meetings:meeting_detail', pk=agenda.meeting.pk)
+        return super().dispatch(request, *args, **kwargs)
 
     def test_func(self) -> bool:
         """Check the permission matching the agenda item type."""
@@ -237,6 +285,20 @@ class AgendaItemDeleteView(LoginRequiredMixin, AgendaPermissionMixin, DeleteView
     model = AgendaItem
     template_name = 'agendas/item_confirm_delete.html'
     required_permission = 'agenda.delete_item_regular'
+
+    def dispatch(self, request, *args, **kwargs):
+        """Block delete confirmation access when the meeting agenda is locked."""
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        self.object = self.get_object()
+        agenda = self.object.agenda
+        if not agenda.is_editable:
+            messages.error(
+                request,
+                f'Tagesordnung kann nicht bearbeitet werden. Sitzungsstatus: {agenda.meeting.get_status_display()}'
+            )
+            return redirect('meetings:meeting_detail', pk=agenda.meeting.pk)
+        return super().dispatch(request, *args, **kwargs)
 
     def test_func(self) -> bool:
         """Check the permission matching the agenda item type."""

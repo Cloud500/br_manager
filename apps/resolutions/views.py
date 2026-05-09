@@ -3,16 +3,45 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import HttpResponseRedirect
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
 
+from apps.agendas.models import Agenda, AgendaItem
 from apps.committees.models import Committee, Membership
 from apps.resolutions.forms import ResolutionForm, ResolutionStatusForm
-from apps.resolutions.models import Resolution
+from apps.resolutions.models import Resolution, ResolutionAgendaItem
+
+
+def _user_has_agenda_permission(user, agenda, permission_codename: str) -> bool:
+    """Check agenda permission using the same MAIN/BA rule as agenda views."""
+    if user.is_superuser or user.is_staff:
+        return True
+
+    committee = agenda.meeting.committee
+    if Membership.objects.filter(
+        user=user,
+        committee=committee,
+        is_active=True,
+        role__permissions__codename=permission_codename,
+    ).exists():
+        return True
+
+    if committee.committee_type == 'MAIN':
+        return Membership.objects.filter(
+            user=user,
+            committee__parent=committee,
+            committee__committee_type='COMMITTEE',
+            committee__is_active=True,
+            is_active=True,
+            role__permissions__codename=permission_codename,
+        ).exists()
+
+    return False
 
 
 class ResolutionPermissionMixin:
@@ -160,11 +189,11 @@ class ResolutionDetailView(LoginRequiredMixin, ResolutionPermissionMixin, Detail
         )
         context['can_propose'] = (
             resolution.can_be_proposed and 
-            self.get_user_permission(resolution, 'resolution.propose')
+            Resolution.user_can_propose(self.request.user, resolution.committee)
         )
         context['can_withdraw'] = (
             resolution.can_be_withdrawn and 
-            self.get_user_permission(resolution, 'resolution.propose')
+            Resolution.user_can_propose(self.request.user, resolution.committee)
         )
         
         return context
@@ -176,17 +205,101 @@ class ResolutionCreateView(LoginRequiredMixin, CreateView):
     model = Resolution
     form_class = ResolutionForm
     template_name = 'resolutions/resolution_form.html'
+
+    def get_source_agenda(self):
+        """Return the agenda that initiated direct resolution creation, if any."""
+        agenda_id = self.request.GET.get('agenda') or self.request.POST.get('agenda')
+        if not agenda_id:
+            return None
+        if not hasattr(self, '_source_agenda'):
+            self._source_agenda = get_object_or_404(
+                Agenda.objects.select_related('meeting', 'meeting__committee'),
+                pk=agenda_id,
+            )
+        return self._source_agenda
+
+    def dispatch(self, request, *args, **kwargs):
+        """Validate meeting-scoped direct creation permissions."""
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
+        agenda = self.get_source_agenda()
+        if agenda is None:
+            return super().dispatch(request, *args, **kwargs)
+
+        meeting = agenda.meeting
+        committee = meeting.committee
+        if not agenda.is_editable:
+            messages.error(request, 'Tagesordnung kann nicht bearbeitet werden.')
+            return redirect('meetings:meeting_detail', pk=meeting.pk)
+        if not _user_has_agenda_permission(request.user, agenda, 'agenda.add_item_resolution'):
+            messages.error(request, 'Sie haben keine Berechtigung für diese Aktion.')
+            return redirect('meetings:meeting_detail', pk=meeting.pk)
+        if not committee.can_create_resolutions:
+            messages.error(request, 'Dieses Gremium darf keine Beschlüsse erstellen')
+            return redirect('meetings:meeting_detail', pk=meeting.pk)
+        if not Resolution.user_can_create(request.user, committee):
+            messages.error(
+                request,
+                'Sie haben keine Berechtigung Beschlüsse für dieses Gremium zu erstellen',
+            )
+            return redirect('meetings:meeting_detail', pk=meeting.pk)
+        if not Resolution.user_can_propose(request.user, committee):
+            messages.error(
+                request,
+                'Sie haben keine Berechtigung Beschlüsse für dieses Gremium vorzuschlagen',
+            )
+            return redirect('meetings:meeting_detail', pk=meeting.pk)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_initial(self):
+        """Preselect the meeting committee when launched from an agenda."""
+        initial = super().get_initial()
+        agenda = self.get_source_agenda()
+        if agenda is not None:
+            initial['committee'] = agenda.meeting.committee
+        return initial
+
+    def get_form(self, form_class=None):
+        """Limit committee selection to the meeting committee in agenda flow."""
+        form = super().get_form(form_class)
+        agenda = self.get_source_agenda()
+        if agenda is not None:
+            committee = agenda.meeting.committee
+            form.fields['committee'].queryset = form.fields['committee'].queryset.filter(
+                pk=committee.pk,
+            )
+            form.fields['committee'].initial = committee
+            form.fields['committee'].help_text = 'Gremium der Sitzung'
+        return form
     
     def get_form_kwargs(self):
         """Pass user to form."""
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
         return kwargs
+
+    def get_context_data(self, **kwargs):
+        """Add meeting-scoped direct creation context."""
+        context = super().get_context_data(**kwargs)
+        agenda = self.get_source_agenda()
+        context['source_agenda'] = agenda
+        if agenda is not None:
+            context['cancel_url'] = reverse(
+                'agendas:item_resolution_create',
+                kwargs={'agenda_id': agenda.pk},
+            )
+        return context
     
     def form_valid(self, form):
         """Set created_by and validate permissions."""
+        agenda = self.get_source_agenda()
         resolution = form.save(commit=False)
         resolution.created_by = self.request.user
+        if agenda is not None:
+            resolution.committee = agenda.meeting.committee
+            resolution.status = 'PROPOSED'
         
         # Validate user can create for this committee
         if not Resolution.user_can_create(self.request.user, resolution.committee):
@@ -196,18 +309,38 @@ class ResolutionCreateView(LoginRequiredMixin, CreateView):
             )
             return self.form_invalid(form)
         
-        resolution.save()
+        if agenda is not None:
+            with transaction.atomic():
+                resolution.save()
+                agenda_item = AgendaItem.objects.create(
+                    agenda=agenda,
+                    title=resolution.title,
+                    description='',
+                    sort_order=agenda.next_sort_order(),
+                    item_type=AgendaItem.TYPE_RESOLUTION,
+                )
+                ResolutionAgendaItem.objects.create(
+                    agenda_item=agenda_item,
+                    resolution=resolution,
+                )
+        else:
+            resolution.save()
+
         self.object = resolution
         
         messages.success(
             self.request,
             f'Beschluss "{resolution.title}" wurde erstellt'
+            + (' und zur Tagesordnung hinzugefügt' if agenda is not None else '')
         )
         
         return HttpResponseRedirect(self.get_success_url())
     
     def get_success_url(self):
         """Redirect to resolution detail."""
+        agenda = self.get_source_agenda()
+        if agenda is not None:
+            return reverse('meetings:meeting_detail', kwargs={'pk': agenda.meeting.pk})
         return reverse('resolutions:resolution_detail', kwargs={'pk': self.object.pk})
 
 
@@ -293,7 +426,7 @@ class ResolutionStatusChangeView(LoginRequiredMixin, ResolutionPermissionMixin, 
         action = form.cleaned_data['action']
         
         # Check permission
-        if not self.get_user_permission(resolution, 'resolution.propose'):
+        if not Resolution.user_can_propose(request.user, resolution.committee):
             raise PermissionDenied('Sie haben keine Berechtigung den Status zu ändern')
         
         # Perform action

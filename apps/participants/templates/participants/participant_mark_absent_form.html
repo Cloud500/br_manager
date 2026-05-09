@@ -21,20 +21,32 @@
                 <div class="card mb-4">
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-4">
+                            <div class="col-md-4 mb-3">
                                 <strong>Name:</strong><br>
                                 {{ participant.display_name_for_display }}
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4 mb-3">
                                 <strong>Rolle / Funktion:</strong><br>
                                 {{ participant.role_for_display }}
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4 mb-3">
                                 <strong>Aktueller Status:</strong><br>
                                 {{ participant.get_status_display }}
                                 {% if participant.substitute_membership %}
                                     <br><small class="text-muted">Nachgeladen: {{ participant.substitute_name_for_display }}</small>
                                 {% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Liste:</strong><br>
+                                {{ participant.membership.election_list_name|default:"Keine Liste" }}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Position:</strong><br>
+                                {{ participant.membership.election_list_position|default:"-" }}
+                            </div>
+                            <div class="col-md-4">
+                                <strong>Stimmen:</strong><br>
+                                {{ participant.membership.election_votes|default:"-" }}
                             </div>
                         </div>
                     </div>

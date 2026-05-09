@@ -19,7 +19,9 @@
             <div class="card shadow-sm mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Wahldaten</h5>
-                    {% if election.status == 'PUBLISHED' %}
+                    {% if election.status == 'COMPLETED' %}
+                        <span class="badge bg-primary">Durchgeführt</span>
+                    {% elif election.status == 'PUBLISHED' %}
                         <span class="badge bg-success">Veröffentlicht</span>
                     {% else %}
                         <span class="badge bg-secondary">Entwurf</span>
@@ -46,6 +48,53 @@
                     </ul>
                 </div>
             </div>
+
+            {% if result %}
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">Wahlergebnis</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-3">
+                            <dt class="col-sm-4">Beschlussfähigkeit</dt>
+                            <dd class="col-sm-8">
+                                {{ result.is_quorate|yesno:"ja,nein" }}
+                                {% if result.quorum_manually_overridden %}
+                                    <span class="badge text-bg-warning ms-2">manuell gesetzt</span>
+                                {% endif %}
+                            </dd>
+                            <dt class="col-sm-4">Stimmberechtigte</dt>
+                            <dd class="col-sm-8">{{ result.eligible_voters }}</dd>
+                            <dt class="col-sm-4">Abgegebene Stimmen</dt>
+                            <dd class="col-sm-8">{{ result.votes_cast }}</dd>
+                            <dt class="col-sm-4">Ungültige Stimmen</dt>
+                            <dd class="col-sm-8">{{ result.invalid_votes }}</dd>
+                            <dt class="col-sm-4">Erfasst am</dt>
+                            <dd class="col-sm-8">{{ result.recorded_at|date:"d.m.Y H:i" }}</dd>
+                        </dl>
+                        {% if result.quorum_override_reason %}
+                            <div class="alert alert-warning">
+                                <strong>Begründung manuelle Beschlussfähigkeit:</strong><br>
+                                {{ result.quorum_override_reason|linebreaksbr }}
+                            </div>
+                        {% endif %}
+                        <h6>Kandidierenden-Ergebnisse</h6>
+                        <ul class="list-group">
+                            {% for candidate_result in result.candidate_results.all %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span>
+                                        {{ candidate_result.candidate.name }}
+                                        {% if candidate_result.elected %}
+                                            <span class="badge text-bg-success ms-2">gewählt</span>
+                                        {% endif %}
+                                    </span>
+                                    <span>{{ candidate_result.votes }} Stimmen</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            {% endif %}
 
             <div class="d-flex gap-2">
                 {% if can_edit %}

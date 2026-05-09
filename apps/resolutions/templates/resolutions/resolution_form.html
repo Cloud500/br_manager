@@ -40,7 +40,7 @@
                         {{ form|crispy }}
                         
                         <div class="d-flex justify-content-between mt-4">
-                            <a href="{% if object %}{% url 'resolutions:resolution_detail' object.pk %}{% else %}{% url 'resolutions:resolution_list' %}{% endif %}" class="btn btn-secondary">
+                            <a href="{% if cancel_url %}{{ cancel_url }}{% elif object %}{% url 'resolutions:resolution_detail' object.pk %}{% else %}{% url 'resolutions:resolution_list' %}{% endif %}" class="btn btn-secondary">
                                 <i class="bi bi-x-circle"></i> Abbrechen
                             </a>
                             <button type="submit" class="btn btn-primary">

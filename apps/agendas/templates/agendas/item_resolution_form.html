@@ -30,6 +30,18 @@
                         {% csrf_token %}
                         {{ form|crispy }}
                         
+                        {% if can_create_direct_resolution %}
+                            <div class="alert alert-secondary d-flex justify-content-between align-items-center mt-3">
+                                <div>
+                                    <i class="bi bi-plus-circle"></i>
+                                    Kein passender Beschluss vorhanden?
+                                </div>
+                                <a href="{% url 'resolutions:resolution_create' %}?agenda={{ agenda.pk }}" class="btn btn-sm btn-outline-primary">
+                                    Neuen Beschluss erstellen
+                                </a>
+                            </div>
+                        {% endif %}
+
                         <div class="d-flex justify-content-between mt-4">
                             <a href="{% url 'meetings:meeting_detail' agenda.meeting.pk %}" class="btn btn-secondary">
                                 <i class="bi bi-x-circle"></i> Abbrechen

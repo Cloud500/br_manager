@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Wahlen{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h1><i class="bi bi-person-check"></i> Wahlen</h1>
+            <p class="text-muted mb-0">Übersicht der sichtbaren Wahlvorgänge</p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Wahl</th>
+                        <th>Sitzung</th>
+                        <th>Gremium</th>
+                        <th>Status</th>
+                        <th>Ergebnis</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for election in elections %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'elections:election_detail' election.pk %}" class="fw-semibold text-decoration-none">
+                                    {{ election.title }}
+                                </a>
+                                <div class="small text-muted">TOP {{ election.item_number }}</div>
+                            </td>
+                            <td>
+                                {{ election.agenda.meeting.meeting_number }} · {{ election.agenda.meeting.title }}
+                                <div class="small text-muted">{{ election.agenda.meeting.date|date:"d.m.Y" }}</div>
+                            </td>
+                            <td>{{ election.agenda.meeting.committee.name }}</td>
+                            <td><span class="badge text-bg-secondary">{{ election.get_status_display }}</span></td>
+                            <td>
+                                {% if election.result %}
+                                    {{ election.result.votes_cast }} Stimmen
+                                    <div class="small text-muted">
+                                        Beschlussfähig: {{ election.result.is_quorate|yesno:"ja,nein" }}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">Noch kein Ergebnis</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">Keine Wahlen sichtbar.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

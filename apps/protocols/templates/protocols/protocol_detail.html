@@ -1,0 +1,311 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ protocol }} - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h1 class="h3 mb-1">{{ protocol }}</h1>
+            <p class="text-muted mb-0">{{ protocol.meeting.title }} · {{ protocol.meeting.date|date:'d.m.Y' }}</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="{% url 'meetings:meeting_detail' protocol.meeting.pk %}">Zur Sitzung</a>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h1 class="mb-0">Sitzung</h1>
+            <span class="badge text-bg-secondary">{{ protocol.get_status_display }}</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="text-muted small">Sitzungsort / Typ</div>
+                    <div>{{ protocol.meeting.get_full_location }} · {{ protocol.meeting.get_meeting_type_display }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Sitzungsbeginn</div>
+                    <div>{{ meeting_start_display }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Sitzungsleitung</div>
+                    <div>{{ protocol.meeting.chair.get_full_name|default:'—' }}</div>
+                </div>
+                <div class="col-md-6">
+                    <div class="text-muted small">Protokollführung</div>
+                    <div>{{ protocol.meeting.clerk.get_full_name|default:'—' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h1 class="mb-0">Teilnehmer</h1></div>
+        <div class="card-body">
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h3 class="h6">Anwesende Teilnehmer</h3>
+                    <ul class="mb-0">
+                        {% for participant in present_participants %}
+                            <li>
+                                {{ participant.display_name_for_display }}
+                                {% if participant.protocol_periods %}
+                                    <span class="small text-muted">
+                                        ({% for period in participant.protocol_periods %}{{ period.start|date:'H:i' }}–{{ period.end|date:'H:i' }}{% if not forloop.last %}, {% endif %}{% endfor %})
+                                    </span>
+                                {% endif %}
+                            </li>
+                        {% empty %}
+                            <li class="text-muted">Keine Anwesenheit erfasst.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h6">Entschuldigt abwesend</h3>
+                    <ul class="mb-0">
+                        {% for participant in excused_absent_participants %}
+                            <li>{{ participant.display_name_for_display }}{% if participant.absence_reason %} — {{ participant.absence_reason }}{% endif %}</li>
+                        {% empty %}
+                            <li class="text-muted">Keine entschuldigten Abwesenheiten.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h6">Unentschuldigt abwesend</h3>
+                    <ul class="mb-0">
+                        {% for participant in unexcused_absent_participants %}
+                            <li>{{ participant.display_name_for_display }}</li>
+                        {% empty %}
+                            <li class="text-muted">Keine unentschuldigten Abwesenheiten.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h6">Geladene Gäste</h3>
+                    <ul class="mb-0">
+                        {% for participant in guest_participants %}
+                            <li>{{ participant.display_name_for_display }}</li>
+                        {% empty %}
+                            <li class="text-muted">Keine Gäste geladen.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-12">
+                    <h3 class="h6">Folgende Ersatzmitglieder wurden geladen</h3>
+                    <ul class="mb-0">
+                        {% for participant in substitute_participants %}
+                            <li>{{ participant.substitute_name_for_display }} für {{ participant.display_name_for_display }}</li>
+                        {% empty %}
+                            <li class="text-muted">Keine Ersatzmitglieder geladen.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h1 class="mb-0">Tagesordnung</h1></div>
+        <div class="card-body">
+            {% for item in agenda_items %}
+                <div class="py-1 {{ item.indent_class }}">
+                    <div class="d-flex align-items-start gap-2">
+                        <span class="fw-semibold flex-shrink-0">{{ item.number_display }}</span>
+                        <div>
+                            {% if item.agenda_item_id %}
+                                <a class="link-dark text-decoration-none protocol-agenda-link" href="#top-note-{{ item.agenda_item_id }}">{{ item.title }}</a>
+                            {% else %}
+                                <span>{{ item.title }}</span>
+                            {% endif %}
+                            {% if item.description %}<div class="small text-muted mt-1">{{ item.description|linebreaksbr }}</div>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% empty %}
+                <div class="text-muted">Keine Tagesordnung im Protokollstand vorhanden.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h1 class="mb-0">Diskussion und Maßnahmen</h1></div>
+        <div class="list-group list-group-flush">
+            {% for item in discussion_items %}
+                <div class="list-group-item" id="top-note-{{ item.agenda_item_id }}">
+                    <h2 class="fw-semibold mb-2">{{ item.item_number }}. {{ item.title }}</h2>
+                    {% if can_edit_protocol and item.agenda_item %}
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="agenda_note">
+                            <input type="hidden" name="agenda_item_id" value="{{ item.agenda_item_id }}">
+                            <input type="hidden" name="body" data-quill-input>
+                            <div class="protocol-quill-editor" data-quill-editor aria-label="Formatierbare Notiz zu {{ item.title }}">{{ item.note_body|safe }}</div>
+                            <button type="submit" class="btn btn-sm btn-primary mt-2">Notiz speichern</button>
+                        </form>
+                    {% elif item.note_body %}
+                        <div class="protocol-formatted-content">{{ item.note_body|safe }}</div>
+                    {% else %}
+                        <p class="text-muted mb-0">Keine Notiz erfasst.</p>
+                    {% endif %}
+                </div>
+            {% empty %}
+                <div class="list-group-item text-muted">Keine TOPs vorhanden.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h1 class="mb-0">Wahlen</h1></div>
+        <div class="list-group list-group-flush">
+            {% for result in election_entries %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <strong>{% if result.entry.agenda_item %}TOP {{ result.entry.agenda_item.item_number }} {% endif %}{{ result.entry.title }}</strong>
+                            <div class="small text-muted">Erfasst am {{ result.data.recorded_at|default:'—' }}</div>
+                        </div>
+                        {% if result.data.is_quorate %}<span class="badge text-bg-success">beschlussfähig</span>{% else %}<span class="badge text-bg-danger">nicht beschlussfähig</span>{% endif %}
+                    </div>
+                    <div class="row g-2 small mt-2">
+                        <div class="col-md-4"><strong>Stimmberechtigt:</strong> {{ result.data.eligible_voters }}</div>
+                        <div class="col-md-4"><strong>Abgegebene Stimmen:</strong> {{ result.data.votes_cast }}</div>
+                        <div class="col-md-4"><strong>Ungültig:</strong> {{ result.data.invalid_votes }}</div>
+                    </div>
+                    {% if result.data.quorum_manually_overridden %}
+                        <div class="alert alert-warning py-2 mt-2 mb-0">Beschlussfähigkeit manuell bewertet: {{ result.data.quorum_override_reason }}</div>
+                    {% endif %}
+                    <table class="table table-sm mt-3 mb-0">
+                        <thead><tr><th>Kandidat/in</th><th>Stimmen</th><th>Ergebnis</th></tr></thead>
+                        <tbody>
+                            {% for candidate in result.data.candidate_results %}
+                                <tr>
+                                    <td>{{ candidate.name }}</td>
+                                    <td>{{ candidate.votes }}</td>
+                                    <td>{% if candidate.elected %}<span class="badge text-bg-success">gewählt</span>{% else %}<span class="text-muted">nicht gewählt</span>{% endif %}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% empty %}
+                <div class="list-group-item text-muted">Keine durchgeführten Wahlen protokolliert.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h1 class="mb-0">Beschlussfassungen</h1></div>
+        <div class="list-group list-group-flush">
+            {% for result in resolution_entries %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <strong>{% if result.entry.agenda_item %}TOP {{ result.entry.agenda_item.item_number }} {% endif %}{{ result.entry.title }}</strong>
+                            {% if result.data.resolution_number %}<div class="small text-muted">{{ result.data.resolution_number }}</div>{% endif %}
+                        </div>
+                        {% if result.data.status == 'APPROVED' %}<span class="badge text-bg-success">angenommen</span>{% else %}<span class="badge text-bg-danger">abgelehnt</span>{% endif %}
+                    </div>
+                    <div class="mt-3">
+                        <div class="text-muted small">Beschlussfassung</div>
+                        {% if result.data.decision_text %}<div class="protocol-formatted-content">{{ result.data.decision_text|safe }}</div>{% elif result.note_body %}<div class="protocol-formatted-content">{{ result.note_body|safe }}</div>{% else %}<p class="text-muted mb-0">Keine Beschlussfassung erfasst.</p>{% endif %}
+                    </div>
+                    <div class="row g-2 small mt-2">
+                        <div class="col-md-3"><strong>Ja:</strong> {{ result.data.yes_votes }}</div>
+                        <div class="col-md-3"><strong>Nein:</strong> {{ result.data.no_votes }}</div>
+                        <div class="col-md-3"><strong>Enthaltungen:</strong> {{ result.data.abstentions }}</div>
+                        <div class="col-md-3"><strong>Stimmberechtigt:</strong> {{ result.data.eligible_voters }}</div>
+                    </div>
+                    {% if result.data.quorum_manually_overridden %}
+                        <div class="alert alert-warning py-2 mt-2 mb-0">Beschlussfähigkeit manuell bewertet: {{ result.data.quorum_override_reason }}</div>
+                    {% endif %}
+                </div>
+            {% empty %}
+                <div class="list-group-item text-muted">Keine Beschlussfassungen protokolliert.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header"><h1 class="mb-0">Ende der Sitzung</h1></div>
+        <div class="card-body">{{ meeting_end_display }}</div>
+    </div>
+</div>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css">
+<style>
+    .protocol-quill-editor .ql-editor {
+        min-height: 10rem;
+    }
+
+    html {
+        scroll-behavior: smooth;
+    }
+
+    .protocol-agenda-link:hover,
+    .protocol-agenda-link:focus {
+        text-decoration: underline !important;
+    }
+
+    [id^="top-note-"] {
+        scroll-margin-top: 5rem;
+    }
+
+    .protocol-formatted-content .ql-size-small {
+        font-size: 0.75em;
+    }
+
+    .protocol-formatted-content .ql-size-large {
+        font-size: 1.5em;
+    }
+
+    .protocol-formatted-content .ql-size-huge {
+        font-size: 2.5em;
+    }
+
+    .protocol-formatted-content li[data-list="bullet"] {
+        list-style-type: disc;
+    }
+
+    .protocol-formatted-content li[data-list="ordered"] {
+        list-style-type: decimal;
+    }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof Quill === 'undefined') {
+            return;
+        }
+        const allowedHeaders = [3, 4, 5, 6, false];
+        const allowedSizes = ['small', false, 'large'];
+        const toolbarOptions = [
+            [{ header: allowedHeaders }],
+            [{ size: allowedSizes }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ color: [] }, { background: [] }],
+            [{ script: 'sub' }, { script: 'super' }],
+            [{ list: 'ordered' }, { list: 'bullet' }],
+            [{ indent: '-1' }, { indent: '+1' }],
+            [{ align: [] }],
+            ['blockquote', 'link', 'clean']
+        ];
+        document.querySelectorAll('[data-quill-editor]').forEach(function (editorElement) {
+            const form = editorElement.closest('form');
+            const input = form ? form.querySelector('[data-quill-input]') : null;
+            if (!editorElement || !input) {
+                return;
+            }
+            const quill = new Quill(editorElement, {
+                theme: 'snow',
+                modules: { toolbar: toolbarOptions }
+            });
+            input.value = quill.root.innerHTML;
+            quill.on('text-change', function () {
+                input.value = quill.root.innerHTML;
+            });
+            form.addEventListener('submit', function () {
+                input.value = quill.root.innerHTML;
+            });
+        });
+    });
+</script>
+{% endblock %}

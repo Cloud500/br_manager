@@ -1,0 +1,35 @@
+{% extends 'meetings/base_meeting.html' %}
+
+{% block meeting_content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h1 class="h4 mb-0">Sitzung erneut bestätigen</h1>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">Bitte bestätigen Sie Ihre Teilnahme an „{{ meeting.title }}“.</p>
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="id_password" class="form-label">Passwort</label>
+                            <input type="password" name="password" id="id_password" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="id_code" class="form-label">2FA-Code</label>
+                            <input type="text" name="code" id="id_code" class="form-control" autocomplete="one-time-code">
+                            <div class="form-text">Erforderlich, wenn 2FA für Ihr Konto aktiviert ist.</div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input type="checkbox" name="use_recovery" id="id_use_recovery" class="form-check-input">
+                            <label for="id_use_recovery" class="form-check-label">Recovery-Code verwenden</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Bestätigen</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

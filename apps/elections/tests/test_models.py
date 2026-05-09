@@ -7,9 +7,12 @@ from django.test import TestCase
 
 from apps.accounts.factories import UserFactory
 from apps.agendas.models import AgendaItem
-from apps.committees.factories import MainCommitteeFactory
-from apps.elections.models import Election, ElectionCandidate
+from apps.committees.factories import MainCommitteeFactory, RegularMembershipFactory
+from apps.elections.models import Election, ElectionCandidate, ElectionResult
+from apps.elections.services import ElectionResultService
 from apps.meetings.models import Meeting
+from apps.participants.models import MeetingParticipant
+from apps.protocols.models import ProtocolEntry
 
 
 class ElectionModelTests(TestCase):
@@ -109,6 +112,49 @@ class ElectionModelTests(TestCase):
             parent.delete()
 
         self.assertTrue(Election.objects.filter(pk=election.pk).exists())
+
+    def test_record_result_persists_candidate_results_and_protocol_entry(self):
+        """Election results are stored separately and mirrored to protocol."""
+        membership = RegularMembershipFactory.create(user=self.user, committee=self.committee)
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+        participant, _created = MeetingParticipant.objects.get_or_create(
+            meeting=self.meeting,
+            membership=membership,
+        )
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.save(update_fields=["attendance_status", "updated_at"])
+        election = self._election(title='Wahl des Vorsitzes')
+        candidate = ElectionCandidate.objects.create(election=election, name='Max Mustermann')
+        election.publish()
+
+        with self.assertRaises(ValidationError):
+            ElectionResultService.record_result(
+                election=election,
+                candidate_votes={candidate.pk: 2},
+                elected_candidate_ids={candidate.pk},
+                is_quorate=True,
+                actor=self.user,
+            )
+
+        self.meeting.current_agenda_item = election.agenda_item
+        self.meeting.save(update_fields=["current_agenda_item", "updated_at"])
+        result = ElectionResultService.record_result(
+            election=election,
+            candidate_votes={str(candidate.pk): 1},
+            elected_candidate_ids={candidate.pk},
+            is_quorate=True,
+            quorum_manually_overridden=True,
+            quorum_override_reason='Manuelle Prüfung',
+            actor=self.user,
+        )
+
+        self.assertIsInstance(result, ElectionResult)
+        self.assertEqual(result.candidate_results.get(candidate=candidate).votes, 1)
+        self.assertTrue(result.candidate_results.get(candidate=candidate).elected)
+        entry = ProtocolEntry.objects.get(object_ref=f"election:{election.pk}")
+        self.assertEqual(entry.entry_type, ProtocolEntry.ENTRY_ELECTION)
+        self.assertEqual(entry.data["candidate_results"][0]["votes"], 1)
 
     def _election(self, title='Wahl', sort_order=1, majority_type=Election.MAJORITY_ABSOLUTE):
         """Create an election with its linked agenda item."""

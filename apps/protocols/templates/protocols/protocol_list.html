@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Protokolle - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Protokolle</h1>
+            <p class="text-muted mb-0">Übersicht der Sitzungsprotokolle</p>
+        </div>
+    </div>
+    <div class="card shadow-sm">
+        <div class="list-group list-group-flush">
+            {% for protocol in protocols %}
+                <a class="list-group-item list-group-item-action" href="{% url 'protocols:protocol_detail' protocol.pk %}">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <strong>{{ protocol.meeting.meeting_number }} · {{ protocol.meeting.title }}</strong>
+                            <div class="small text-muted">{{ protocol.meeting.committee.name }} · {{ protocol.meeting.date|date:'d.m.Y' }}</div>
+                        </div>
+                        <span class="badge text-bg-secondary">{{ protocol.get_status_display }}</span>
+                    </div>
+                </a>
+            {% empty %}
+                <div class="list-group-item text-muted">Keine Protokolle vorhanden.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

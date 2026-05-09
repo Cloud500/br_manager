@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Optional
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -163,6 +164,14 @@ class Meeting(models.Model):
         verbose_name='Beschlussfähig',
         help_text='Wird nach Anwesenheitsprüfung automatisch gesetzt'
     )
+    current_agenda_item = models.ForeignKey(
+        'agendas.AgendaItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='current_in_meetings',
+        verbose_name='Aktueller Tagesordnungspunkt',
+    )
     
     # Responsible persons (dynamically selected from committee members)
     chair = models.ForeignKey(
@@ -233,8 +242,6 @@ class Meeting(models.Model):
         Raises:
             ValidationError: If validation fails
         """
-        from django.core.exceptions import ValidationError
-        
         # Meeting type validation
         if self.meeting_type == 'ONLINE':
             # Online: location_url required, address fields not allowed
@@ -301,6 +308,16 @@ class Meeting(models.Model):
             if self.actual_end_time <= self.actual_start_time:
                 raise ValidationError({
                     'actual_end_time': 'Tatsächliches Ende muss nach tatsächlichem Beginn liegen'
+                })
+
+        if self.current_agenda_item_id:
+            if not self.pk:
+                raise ValidationError({
+                    'current_agenda_item': 'Aktueller TOP kann erst nach dem Speichern gesetzt werden'
+                })
+            if self.current_agenda_item.agenda.meeting_id != self.pk:
+                raise ValidationError({
+                    'current_agenda_item': 'Aktueller TOP muss zu dieser Sitzung gehören'
                 })
         
         # Chair/Clerk must be members of committee (if set)
@@ -463,7 +480,37 @@ class Meeting(models.Model):
     
     # Permission check methods
     @staticmethod
-    def user_can_create(user: 'User', committee: 'Committee') -> bool:
+    def creatable_committees_for_user(user: 'User'):
+        """Return active committees for which the user may create meetings."""
+        from apps.committees.models import Committee, Membership
+        
+        if user.is_superuser or user.is_staff:
+            return Committee.objects.filter(is_active=True)
+        
+        direct_committee_ids = Membership.objects.filter(
+            user=user,
+            is_active=True,
+            committee__is_active=True,
+            role__permissions__codename='meeting.create'
+        ).values_list('committee_id', flat=True)
+        
+        main_committee_ids_via_ba = Membership.objects.filter(
+            user=user,
+            is_active=True,
+            committee__is_active=True,
+            committee__committee_type='COMMITTEE',
+            committee__parent__is_active=True,
+            committee__parent__committee_type='MAIN',
+            role__permissions__codename='meeting.create'
+        ).values_list('committee__parent_id', flat=True)
+        
+        return Committee.objects.filter(
+            Q(id__in=direct_committee_ids) | Q(id__in=main_committee_ids_via_ba),
+            is_active=True
+        ).distinct()
+    
+    @staticmethod
+    def user_can_create(user: 'User', committee: Optional['Committee'] = None) -> bool:
         """
         Check if user is allowed to create a meeting for the given committee.
         
@@ -475,7 +522,9 @@ class Meeting(models.Model):
         
         Args:
             user: User instance
-            committee: Committee instance
+            committee: Committee instance. If omitted, checks whether the user can
+                create a meeting in at least one committee, so the create form can
+                be opened before a committee is selected.
         
         Returns:
             True if user can create meeting in this committee
@@ -490,6 +539,12 @@ class Meeting(models.Model):
         if user.is_staff:
             return True
         
+        if committee is None:
+            return Meeting.creatable_committees_for_user(user).exists()
+        
+        if not committee.is_active:
+            return False
+         
         # Get user's memberships in this committee
         memberships = Membership.objects.filter(
             user=user,
@@ -602,6 +657,8 @@ class Meeting(models.Model):
         Returns:
             True if user can start meeting
         """
+        if meeting.chair_id and meeting.chair_id == getattr(user, 'id', None):
+            return True
         return Meeting._user_has_permission(
             user,
             meeting.committee,
@@ -620,6 +677,8 @@ class Meeting(models.Model):
         Returns:
             True if user can complete meeting
         """
+        if meeting.chair_id and meeting.chair_id == getattr(user, 'id', None):
+            return True
         return Meeting._user_has_permission(
             user,
             meeting.committee,

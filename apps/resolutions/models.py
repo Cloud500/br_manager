@@ -100,6 +100,14 @@ class Resolution(models.Model):
         verbose_name='Beschlussfähig',
         help_text='Wird während der Sitzung gesetzt (§ 33 BetrVG)'
     )
+    quorum_manually_overridden = models.BooleanField(
+        default=False,
+        verbose_name='Beschlussfähigkeit manuell überschrieben',
+    )
+    quorum_override_reason = models.TextField(
+        blank=True,
+        verbose_name='Begründung Quorum-Override',
+    )
     yes_votes = models.PositiveIntegerField(
         default=0,
         verbose_name='Ja-Stimmen'
@@ -111,6 +119,11 @@ class Resolution(models.Model):
     abstentions = models.PositiveIntegerField(
         default=0,
         verbose_name='Enthaltungen'
+    )
+    decision_text = models.TextField(
+        blank=True,
+        verbose_name='Beschlussfassung',
+        help_text='Formatierter Text der tatsächlichen Beschlussfassung in der Sitzung',
     )
     
     # Status and workflow
@@ -385,6 +398,34 @@ class Resolution(models.Model):
             ).exists():
                 return True
         
+        return False
+
+    @staticmethod
+    def user_can_propose(user: 'User', committee: 'Committee') -> bool:
+        """Check if user can propose resolutions for the given committee."""
+        from apps.committees.models import Membership
+
+        if user.is_superuser or user.is_staff:
+            return True
+
+        if Membership.objects.filter(
+            user=user,
+            committee=committee,
+            is_active=True,
+            role__permissions__codename='resolution.propose',
+        ).exists():
+            return True
+
+        if committee.committee_type == 'MAIN':
+            return Membership.objects.filter(
+                user=user,
+                committee__parent=committee,
+                committee__committee_type='COMMITTEE',
+                committee__is_active=True,
+                is_active=True,
+                role__permissions__codename='resolution.propose',
+            ).exists()
+
         return False
 
 
