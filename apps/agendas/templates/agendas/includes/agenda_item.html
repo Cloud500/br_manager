@@ -20,11 +20,6 @@
                 <strong>{{ item.title }}</strong>
                 {% if item.item_type == 'ELECTION' and item.election %}
                     <span class="badge bg-info ms-2">Wahl</span>
-                    {% if item.election.status == 'PUBLISHED' %}
-                        <span class="badge bg-success ms-1">Veröffentlicht</span>
-                    {% else %}
-                        <span class="badge bg-secondary ms-1">Entwurf</span>
-                    {% endif %}
                 {% elif item.item_type == 'RESOLUTION' %}
                     <span class="badge bg-success ms-2">Beschluss</span>
                 {% endif %}

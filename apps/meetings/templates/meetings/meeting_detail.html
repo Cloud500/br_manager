@@ -400,10 +400,16 @@
                         <a class="list-group-item list-group-item-action" href="{% url 'elections:election_detail' election.pk %}">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
-                                    <strong>{{ election.agenda_item.item_number }}</strong> {{ election.title }}
+                                    <strong>{{ election.agenda_item.item_number }}.</strong> {{ election.title }}
                                     <div class="small text-muted">{{ election.get_election_type_display }}</div>
                                 </div>
-                                <span class="badge text-bg-secondary">{{ election.get_status_display }}</span>
+                                {% if election.status == "COMPLETED" %}
+                                    <span class="badge text-bg-success">{{ election.get_status_display }}</span>
+                                {% elif election.status == "PUBLISHED" %}
+                                    <span class="badge text-bg-primary">{{ election.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{{ election.get_status_display }}</span>
+                                {% endif %}
                             </div>
                         </a>
                     {% endfor %}
@@ -422,12 +428,21 @@
                         <a class="list-group-item list-group-item-action" href="{% url 'resolutions:resolution_detail' resolution.pk %}">
                             <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
-                                    <strong>{{ resolution.agenda_item.item_number }}</strong> {{ resolution.title }}
+                                    <strong>{{ resolution.agenda_item.item_number }}.</strong> {{ resolution.title }}
                                     {% if resolution.resolution_number %}
                                         <div class="small text-muted">{{ resolution.resolution_number }}</div>
                                     {% endif %}
                                 </div>
-                                <span class="badge text-bg-secondary">{{ resolution.get_status_display }}</span>
+
+                                {% if resolution.status == "APPROVED" %}
+                                    <span class="badge text-bg-success">{{ resolution.get_status_display }}</span>
+                                {% elif resolution.status == "REJECTED" %}
+                                    <span class="badge text-bg-danger">{{ resolution.get_status_display }}</span>
+                                {% elif resolution.status == "PROPOSED" %}
+                                    <span class="badge text-bg-primary">{{ resolution.get_status_display }}</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{{ resolution.get_status_display }}</span>
+                                {% endif %}
                             </div>
                         </a>
                     {% endfor %}
