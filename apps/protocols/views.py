@@ -185,7 +185,8 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
     def _meeting_start_display(self, meeting: Meeting) -> str:
         """Return the most precise available meeting start display."""
         if meeting.actual_start_time:
-            return f"{meeting.date:%d.%m.%Y} {meeting.actual_start_time:%H:%M} Uhr"
+            actual_start_date = meeting.actual_start_date or meeting.date
+            return f"{actual_start_date:%d.%m.%Y} {meeting.actual_start_time:%H:%M} Uhr"
         if meeting.start_time:
             return f"{meeting.date:%d.%m.%Y} {meeting.start_time:%H:%M} Uhr"
         return f"{meeting.date:%d.%m.%Y}"
@@ -193,7 +194,8 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
     def _meeting_end_display(self, meeting: Meeting) -> str:
         """Return the most precise available meeting end display."""
         if meeting.actual_end_time:
-            return f"{meeting.date:%d.%m.%Y} {meeting.actual_end_time:%H:%M} Uhr"
+            actual_end_date = meeting.actual_end_date or meeting.actual_start_date or meeting.date
+            return f"{actual_end_date:%d.%m.%Y} {meeting.actual_end_time:%H:%M} Uhr"
         if meeting.end_time:
             return f"{meeting.date:%d.%m.%Y} {meeting.end_time:%H:%M} Uhr"
         return "Noch nicht erfasst."

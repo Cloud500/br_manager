@@ -166,9 +166,10 @@
                         <tr>
                             <th>Tatsächliche Zeit:</th>
                             <td>
+                                {% if meeting.actual_start_date %}{{ meeting.actual_start_date|date:"d.m.Y" }} {% endif %}
                                 {{ meeting.actual_start_time|time:"H:i" }} Uhr
                                 {% if meeting.actual_end_time %}
-                                    - {{ meeting.actual_end_time|time:"H:i" }} Uhr
+                                    - {% if meeting.actual_end_date %}{{ meeting.actual_end_date|date:"d.m.Y" }} {% endif %}{{ meeting.actual_end_time|time:"H:i" }} Uhr
                                     {% if meeting.get_actual_duration %}
                                         <span class="text-muted">({{ meeting.get_actual_duration }})</span>
                                     {% endif %}

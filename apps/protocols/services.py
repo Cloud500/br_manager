@@ -199,6 +199,8 @@ class ProtocolDraftService:
     @staticmethod
     def _meeting_metadata(meeting) -> dict:
         """Serialize meeting metadata for protocol snapshots."""
+        actual_start_at = meeting.get_actual_start_datetime()
+        actual_end_at = meeting.get_actual_end_datetime()
         return {
             "meeting_id": str(meeting.pk),
             "meeting_number": meeting.meeting_number,
@@ -206,7 +208,9 @@ class ProtocolDraftService:
             "date": meeting.date.isoformat(),
             "start_time": meeting.start_time.isoformat() if meeting.start_time else "",
             "end_time": meeting.end_time.isoformat() if meeting.end_time else "",
+            "actual_start_date": actual_start_at.date().isoformat() if actual_start_at else "",
             "actual_start_time": meeting.actual_start_time.isoformat() if meeting.actual_start_time else "",
+            "actual_end_date": actual_end_at.date().isoformat() if actual_end_at else "",
             "actual_end_time": meeting.actual_end_time.isoformat() if meeting.actual_end_time else "",
             "location": meeting.get_full_location,
             "chair_id": str(meeting.chair_id) if meeting.chair_id else "",

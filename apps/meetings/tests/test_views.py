@@ -1,6 +1,7 @@
 """Tests for meeting workflow views."""
 
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -336,6 +337,31 @@ class MeetingLiveWorkflowTest(TestCase):
         self.assertEqual(self.meeting.status, "IN_PROGRESS")
         self.assertIsNotNone(self.meeting.actual_start_time)
         self.assertTrue(Protocol.objects.filter(meeting=self.meeting).exists())
+
+    @patch("apps.meetings.services.ProtocolDraftService.generate_from_meeting")
+    @patch("apps.meetings.services.timezone.localtime")
+    def test_complete_meeting_allows_end_after_midnight(
+        self,
+        mock_localtime,
+        mock_generate_from_meeting,
+    ):
+        """Completing a meeting after midnight must not compare times only."""
+        meeting_date = date(2026, 5, 10)
+        completion_date = date(2026, 5, 11)
+        mock_localtime.return_value = timezone.make_aware(datetime(2026, 5, 11, 0, 30))
+        self.meeting.date = meeting_date
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.actual_start_date = meeting_date
+        self.meeting.actual_start_time = time(23, 30)
+        self.meeting.save(update_fields=["date", "status", "actual_start_date", "actual_start_time", "updated_at"])
+
+        MeetingWorkflowService.complete_meeting(self.meeting, actor=self.chair)
+
+        self.meeting.refresh_from_db()
+        self.assertEqual(self.meeting.status, "COMPLETED")
+        self.assertEqual(self.meeting.actual_end_date, completion_date)
+        self.assertEqual(self.meeting.actual_end_time, time(0, 30))
+        mock_generate_from_meeting.assert_called_once_with(self.meeting, actor=self.chair)
 
     def test_live_view_requires_loaded_participant_reconfirmation(self):
         """Loaded participants must re-confirm before seeing the live shell."""

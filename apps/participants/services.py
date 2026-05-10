@@ -246,7 +246,10 @@ def attendance_periods_by_participant(meeting: Meeting) -> dict:
             if start:
                 periods.setdefault(participant_id, []).append((start, event.occurred_at))
 
-    end = meeting.actual_end_time or timezone.now()
+    end = timezone.now()
+    actual_end_at = meeting.get_actual_end_datetime()
+    if actual_end_at:
+        end = timezone.make_aware(actual_end_at, timezone.get_current_timezone())
     for participant_id, start in active_starts.items():
         periods.setdefault(participant_id, []).append((start, end))
     return periods

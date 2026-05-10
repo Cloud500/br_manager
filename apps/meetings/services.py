@@ -17,9 +17,11 @@ class MeetingWorkflowService:
         """Start a sent meeting and create its protocol draft."""
         if meeting.status != "SENT":
             raise ValidationError("Sitzung kann nur aus dem Status SENT gestartet werden.")
+        started_at = timezone.localtime()
         meeting.status = "IN_PROGRESS"
-        meeting.actual_start_time = timezone.localtime().time()
-        meeting.save(update_fields=["status", "actual_start_time", "updated_at"])
+        meeting.actual_start_date = started_at.date()
+        meeting.actual_start_time = started_at.time()
+        meeting.save(update_fields=["status", "actual_start_date", "actual_start_time", "updated_at"])
         ProtocolDraftService.get_or_create_for_meeting(meeting, actor=actor)
         return meeting
 
@@ -29,8 +31,10 @@ class MeetingWorkflowService:
         """Complete an in-progress meeting and refresh protocol snapshots."""
         if not meeting.can_complete:
             raise ValidationError("Sitzung kann nur aus dem Status IN_PROGRESS abgeschlossen werden.")
+        completed_at = timezone.localtime()
         meeting.status = "COMPLETED"
-        meeting.actual_end_time = timezone.localtime().time()
-        meeting.save(update_fields=["status", "actual_end_time", "updated_at"])
+        meeting.actual_end_date = completed_at.date()
+        meeting.actual_end_time = completed_at.time()
+        meeting.save(update_fields=["status", "actual_end_date", "actual_end_time", "updated_at"])
         ProtocolDraftService.generate_from_meeting(meeting, actor=actor)
         return meeting

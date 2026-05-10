@@ -1,7 +1,7 @@
 """Models for meetings app."""
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Optional
 
 from django.conf import settings
@@ -32,8 +32,8 @@ class Meeting(models.Model):
         date: Meeting date
         start_time: Scheduled start time
         end_time: Scheduled end time
-        actual_start_time: Actual start time (optional)
-        actual_end_time: Actual end time (optional)
+        actual_start_date/actual_start_time: Actual start date and time (optional)
+        actual_end_date/actual_end_time: Actual end date and time (optional)
         meeting_type: Type of meeting (ONLINE, HYBRID, IN_PERSON)
         location_url: Online meeting URL (required for ONLINE/HYBRID)
         location_name: Location name (required for IN_PERSON/HYBRID)
@@ -107,10 +107,20 @@ class Meeting(models.Model):
         blank=True,
         verbose_name='Tatsächlicher Beginn'
     )
+    actual_start_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Tatsächliches Startdatum'
+    )
     actual_end_time = models.TimeField(
         null=True,
         blank=True,
         verbose_name='Tatsächliches Ende'
+    )
+    actual_end_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Tatsächliches Abschlussdatum'
     )
     
     # Meeting type and location
@@ -305,7 +315,9 @@ class Meeting(models.Model):
             })
         
         if self.actual_end_time and self.actual_start_time:
-            if self.actual_end_time <= self.actual_start_time:
+            actual_start_at = self.get_actual_start_datetime()
+            actual_end_at = self.get_actual_end_datetime()
+            if actual_start_at and actual_end_at and actual_end_at <= actual_start_at:
                 raise ValidationError({
                     'actual_end_time': 'Tatsächliches Ende muss nach tatsächlichem Beginn liegen'
                 })
@@ -463,6 +475,40 @@ class Meeting(models.Model):
             end_dt = datetime.combine(date.today(), self.end_time)
             return end_dt - start_dt
         return None
+
+    def get_actual_start_datetime(self) -> Optional[datetime]:
+        """
+        Return actual start as datetime.
+
+        Falls back to the planned meeting date for legacy rows without an
+        actual_start_date.
+        """
+        if not self.actual_start_time:
+            return None
+        actual_start_date = self.actual_start_date or self.date
+        if not actual_start_date:
+            return None
+        return datetime.combine(
+            actual_start_date,
+            self.actual_start_time
+        )
+
+    def get_actual_end_datetime(self) -> Optional[datetime]:
+        """
+        Return actual end as datetime.
+
+        Falls back to actual_start_date or the planned meeting date for legacy
+        rows without an actual_end_date.
+        """
+        if not self.actual_end_time:
+            return None
+        actual_end_date = self.actual_end_date or self.actual_start_date or self.date
+        if not actual_end_date:
+            return None
+        return datetime.combine(
+            actual_end_date,
+            self.actual_end_time
+        )
     
     def get_actual_duration(self) -> Optional[timedelta]:
         """
@@ -471,11 +517,10 @@ class Meeting(models.Model):
         Returns:
             timedelta if both actual times are set, None otherwise
         """
-        if self.actual_start_time and self.actual_end_time:
-            from datetime import datetime, date
-            start_dt = datetime.combine(date.today(), self.actual_start_time)
-            end_dt = datetime.combine(date.today(), self.actual_end_time)
-            return end_dt - start_dt
+        actual_start_at = self.get_actual_start_datetime()
+        actual_end_at = self.get_actual_end_datetime()
+        if actual_start_at and actual_end_at:
+            return actual_end_at - actual_start_at
         return None
     
     # Permission check methods
