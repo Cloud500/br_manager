@@ -5,7 +5,7 @@ import random
 import re
 import unicodedata
 import time
-from datetime import datetime
+from datetime import date, datetime, timedelta, time as dt_time
 from pathlib import Path
 
 import pyotp
@@ -13,6 +13,7 @@ from faker import Faker as FakerGenerator
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.utils import timezone
 
 from apps.accounts.factories import (
     DEV_TOTP_SECRET,
@@ -21,6 +22,7 @@ from apps.accounts.factories import (
     UserProfileFactory,
 )
 from apps.accounts.models import User
+from apps.agendas.models import AgendaItem
 from apps.committees.factories import (
     ExternalMembershipFactory,
     MainCommitteeFactory,
@@ -29,7 +31,23 @@ from apps.committees.factories import (
     SubstituteMembershipFactory,
 )
 from apps.committees.models import Committee, Membership
+from apps.elections.models import (
+    Election,
+    ElectionCandidate,
+)
+from apps.elections.services import ElectionResultService
+from apps.meetings.models import Meeting
+from apps.meetings.services import MeetingWorkflowService
+from apps.participants.models import MeetingAttendanceEvent, MeetingParticipant
+from apps.participants.services import (
+    current_voting_participants,
+    initialize_meeting_participants,
+    mark_absent,
+    suggest_substitute,
+)
 from apps.roles.models import Role
+from apps.resolutions.models import Resolution, ResolutionAgendaItem
+from apps.resolutions.services import ResolutionDecisionService
 
 
 class Command(BaseCommand):
@@ -98,7 +116,8 @@ class Command(BaseCommand):
 
         # Clear existing data if requested
         if options["clear"]:
-            self.stdout.write("Clearing existing TEST data (Users, Committees, Memberships)...")
+            self.stdout.write("Clearing existing TEST data (Meetings, Users, Committees, Memberships)...")
+            Meeting.objects.all().delete()
             Committee.all_objects.all().hard_delete()
             Membership.all_objects.all().hard_delete()
             User.objects.all().delete()
@@ -108,6 +127,7 @@ class Command(BaseCommand):
         # Create test data
         with transaction.atomic():
             admin = self._create_admin()
+            workflow_data = None
             
             if config:
                 users = self._create_configured_users(config)
@@ -122,21 +142,11 @@ class Command(BaseCommand):
                 else:
                     committees_data = self._create_committees_structure(admin, users)
 
-        # Show summary
-        self._show_summary(admin, users, committees_data)
-
-        # Show TOTP info
-        self._show_totp_info()
-
-        # Write users to file for easy reference
-        self._write_users_file(admin, users)
-
-        self.stdout.write(self.style.SUCCESS("\n" + "=" * 60))
-        self.stdout.write(self.style.SUCCESS("  [OK] SEEDING COMPLETE"))
-        self.stdout.write(self.style.SUCCESS("=" * 60 + "\n"))
+                if committees_data:
+                    workflow_data = self._create_meeting_workflow_data(admin, committees_data)
 
         # Show summary
-        self._show_summary(admin, users, committees_data)
+        self._show_summary(admin, users, committees_data, workflow_data)
 
         # Show TOTP info
         self._show_totp_info()
@@ -677,6 +687,516 @@ class Command(BaseCommand):
             'regular_members': main_committee.get_active_members().count(),
             'substitute_members': main_committee.get_active_substitutes().count(),
         }
+
+    def _create_meeting_workflow_data(self, admin, committees_data):
+        """Create realistic meetings with agendas, participants, decisions, and elections."""
+        self.stdout.write("\n" + "=" * 60)
+        self.stdout.write(self.style.HTTP_INFO("  CREATING MEETING WORKFLOW DATA"))
+        self.stdout.write("=" * 60 + "\n")
+
+        main_committee = committees_data["main_committee"]
+        today = date.today()
+        scenarios = [
+            {
+                "title": "Ordentliche Betriebsratssitzung",
+                "date": today - timedelta(days=21),
+                "completed": True,
+                "absence_count": 1,
+            },
+            {
+                "title": "Außerordentliche Betriebsratssitzung",
+                "date": today - timedelta(days=7),
+                "completed": True,
+                "absence_count": 2,
+            },
+            {
+                "title": "Geplante Betriebsratssitzung",
+                "date": today + timedelta(days=10),
+                "completed": False,
+                "absence_count": 1,
+            },
+        ]
+
+        workflow_data = {
+            "meetings": [],
+            "resolutions": [],
+            "elections": [],
+            "participants": 0,
+            "substitutions": 0,
+            "attendance_events": 0,
+        }
+
+        for scenario in scenarios:
+            meeting = self._create_seed_meeting(
+                admin=admin,
+                committee=main_committee,
+                title=scenario["title"],
+                meeting_date=scenario["date"],
+            )
+            initialize_meeting_participants(meeting)
+            participants_seeded = self._seed_meeting_participants(
+                meeting=meeting,
+                completed=scenario["completed"],
+                absence_count=scenario["absence_count"],
+            )
+            agenda_seeded = self._seed_agenda_workflow(
+                meeting=meeting,
+                admin=admin,
+            )
+            if scenario["completed"]:
+                self._record_completed_workflow_results(meeting, admin, agenda_seeded)
+            else:
+                self._finalize_seed_meeting(meeting)
+
+            workflow_data["meetings"].append(meeting)
+            workflow_data["resolutions"].extend(agenda_seeded["resolutions"])
+            workflow_data["elections"].extend(agenda_seeded["elections"])
+            workflow_data["participants"] += participants_seeded["participants"]
+            workflow_data["substitutions"] += participants_seeded["substitutions"]
+            workflow_data["attendance_events"] += participants_seeded["attendance_events"]
+
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"[OK] Created meeting workflow: {meeting.meeting_number} - {meeting.title}"
+                )
+            )
+
+        return workflow_data
+
+    def _create_seed_meeting(self, admin, committee, title, meeting_date):
+        """Create one editable meeting shell; agenda data is added before status changes."""
+        memberships = list(
+            committee.get_active_members()
+            .select_related("user", "role")
+            .order_by("role__sort_order", "user__last_name", "user__first_name")
+        )
+        chair = self._membership_for_role(memberships, "CHAIR") or memberships[0]
+        clerk = (
+            self._membership_for_role(memberships, "CLERK")
+            or self._first_other_membership(memberships, chair)
+            or chair
+        )
+        meeting_type = random.choice(["IN_PERSON", "HYBRID", "ONLINE"])
+        location_data = self._meeting_location_data(meeting_type)
+
+        return Meeting.objects.create(
+            committee=committee,
+            title=title,
+            date=meeting_date,
+            start_time=dt_time(9, 0),
+            end_time=dt_time(12, 30),
+            meeting_type=meeting_type,
+            status="DRAFT",
+            chair=chair.user,
+            clerk=clerk.user,
+            created_by=admin,
+            **location_data,
+        )
+
+    def _membership_for_role(self, memberships, role_codename):
+        """Return the first membership with the given role codename."""
+        return next(
+            (
+                membership
+                for membership in memberships
+                if membership.role and membership.role.codename == role_codename
+            ),
+            None,
+        )
+
+    def _first_other_membership(self, memberships, excluded_membership):
+        """Return a membership whose user differs from the excluded membership."""
+        return next(
+            (
+                membership
+                for membership in memberships
+                if membership.user_id != excluded_membership.user_id
+            ),
+            None,
+        )
+
+    def _meeting_location_data(self, meeting_type):
+        """Return valid location fields for the selected meeting type."""
+        address = {
+            "location_name": "Betriebsratsbüro",
+            "location_street": "Industriestraße 12",
+            "location_zip": "10115",
+            "location_city": "Berlin",
+            "location_room": random.choice(["A 1.12", "Konferenzraum 2", "BR-Raum"]),
+        }
+        if meeting_type == "ONLINE":
+            return {"location_url": "https://meet.example.org/br-sitzung"}
+        if meeting_type == "HYBRID":
+            return {**address, "location_url": "https://meet.example.org/br-sitzung"}
+        return address
+
+    def _seed_meeting_participants(self, meeting, completed, absence_count):
+        """Seed invited participants, substitute replacements, and attendance events."""
+        invited_at = self._seed_invited_at(meeting)
+        participants = list(
+            meeting.participants.select_related(
+                "membership",
+                "membership__user",
+                "substitute_membership",
+                "substitute_membership__user",
+            ).order_by("membership__role__sort_order", "membership__user__last_name")
+        )
+        substitutions = 0
+        attendance_events = 0
+
+        for participant in participants:
+            participant.status = MeetingParticipant.STATUS_INVITED
+            participant.invite_sent_at = invited_at
+            participant.last_notified_at = invited_at
+            participant.save(
+                update_fields=[
+                    "status",
+                    "invite_sent_at",
+                    "last_notified_at",
+                    "updated_at",
+                ]
+            )
+
+        absence_candidates = [
+            participant
+            for participant in participants
+            if participant.participant_type == MeetingParticipant.PARTICIPANT_TYPE_INTERNAL
+        ]
+        for participant in absence_candidates[:absence_count]:
+            substitute = suggest_substitute(meeting, participant)
+            mark_absent(
+                participant=participant,
+                absence_reason=random.choice(
+                    [
+                        "Arbeitsunfähigkeit",
+                        "Dienstreise",
+                        "Urlaub",
+                        "Schichtbedingte Verhinderung",
+                    ]
+                ),
+                nachladefaehig=True,
+                substitute_membership=substitute,
+                changed_by=meeting.created_by,
+            )
+            participant.refresh_from_db()
+            if substitute:
+                substitutions += 1
+
+        if completed:
+            started_at = timezone.make_aware(
+                datetime.combine(meeting.date, dt_time(9, 5))
+            )
+            for index, participant in enumerate(participants):
+                actor = self._participant_actor(participant)
+                if actor:
+                    self._record_seed_attendance(
+                        participant=participant,
+                        actor=actor,
+                        event_type=MeetingAttendanceEvent.EVENT_CONFIRMED_PRESENT,
+                        attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
+                        occurred_at=started_at + timedelta(minutes=index),
+                        written_confirmation="Ich bestätige meine persönliche Anwesenheit in der Sitzung.",
+                    )
+                    attendance_events += 1
+                else:
+                    self._record_seed_attendance(
+                        participant=participant,
+                        actor=None,
+                        event_type=MeetingAttendanceEvent.EVENT_MARKED_ABSENT,
+                        attendance_status=MeetingParticipant.ATTENDANCE_ABSENT,
+                        occurred_at=started_at + timedelta(minutes=index),
+                    )
+                    attendance_events += 1
+
+            if len(participants) > 3:
+                leaving_participant = participants[-1]
+                actor = self._participant_actor(leaving_participant)
+                if actor:
+                    self._record_seed_attendance(
+                        participant=leaving_participant,
+                        actor=actor,
+                        event_type=MeetingAttendanceEvent.EVENT_LEFT,
+                        attendance_status=MeetingParticipant.ATTENDANCE_LEFT,
+                        occurred_at=started_at + timedelta(hours=1, minutes=15),
+                    )
+                    self._record_seed_attendance(
+                        participant=leaving_participant,
+                        actor=actor,
+                        event_type=MeetingAttendanceEvent.EVENT_RETURNED,
+                        attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
+                        occurred_at=started_at + timedelta(hours=1, minutes=45),
+                        written_confirmation="Ich bin wieder anwesend und nehme weiter an der Sitzung teil.",
+                    )
+                    attendance_events += 2
+
+        return {
+            "participants": len(participants),
+            "substitutions": substitutions,
+            "attendance_events": attendance_events,
+        }
+
+    def _participant_actor(self, participant):
+        """Return the user who is actually loaded for a participant row."""
+        if participant.substitute_membership_id:
+            return participant.substitute_membership.user
+        if participant.status in MeetingParticipant.ACTIVE_STATUSES:
+            return participant.membership.user
+        return None
+
+    def _record_seed_attendance(
+        self,
+        participant,
+        actor,
+        event_type,
+        attendance_status,
+        occurred_at,
+        written_confirmation="",
+    ):
+        """Create one attendance event and denormalize the participant snapshot."""
+        event = MeetingAttendanceEvent.objects.create(
+            meeting=participant.meeting,
+            participant=participant,
+            actor=actor,
+            event_type=event_type,
+            occurred_at=occurred_at,
+            method=MeetingAttendanceEvent.METHOD_SYSTEM,
+            written_confirmation=written_confirmation,
+            metadata={"seed_testdata": True},
+        )
+        participant.attendance_status = attendance_status
+        participant.last_attendance_event_at = event.occurred_at
+        update_fields = ["attendance_status", "last_attendance_event_at", "updated_at"]
+        if attendance_status == MeetingParticipant.ATTENDANCE_PRESENT:
+            participant.last_self_confirmed_at = event.occurred_at
+            participant.last_written_confirmed_at = event.occurred_at
+            update_fields.extend(["last_self_confirmed_at", "last_written_confirmed_at"])
+        participant.save(update_fields=update_fields)
+
+    def _seed_agenda_workflow(self, meeting, admin):
+        """Create agenda items with linked resolutions and elections."""
+        agenda = meeting.agenda
+        seeded = {"resolutions": [], "elections": []}
+
+        self._create_agenda_item(
+            agenda,
+            "Begrüßung und Feststellung der Beschlussfähigkeit",
+            "Eröffnung der Sitzung, Anwesenheitsprüfung und Feststellung der ordnungsgemäßen Einladung.",
+        )
+        self._create_agenda_item(
+            agenda,
+            "Genehmigung der Tagesordnung",
+            "Die vorgeschlagene Tagesordnung wird beraten und genehmigt.",
+        )
+        report_item = self._create_agenda_item(
+            agenda,
+            "Bericht der/des Vorsitzenden",
+            "Aktuelle Informationen aus der laufenden Betriebsratsarbeit.",
+        )
+        self._create_agenda_item(
+            agenda,
+            "Rückmeldungen aus den Ausschüssen",
+            "Kurzberichte aus den Ausschüssen und offenen Arbeitsgruppen.",
+            parent=report_item,
+        )
+
+        resolution = self._create_resolution_agenda_item(meeting, admin)
+        election = self._create_election_agenda_item(meeting, admin)
+        seeded["resolutions"].append(resolution)
+        seeded["elections"].append(election)
+
+        self._create_agenda_item(
+            agenda,
+            "Verschiedenes",
+            "Sonstige Themen, Termine und Arbeitsaufträge.",
+        )
+        return seeded
+
+    def _create_agenda_item(
+        self,
+        agenda,
+        title,
+        description,
+        item_type=AgendaItem.TYPE_REGULAR,
+        parent=None,
+    ):
+        """Create one agenda item using model validation and numbering."""
+        return AgendaItem.objects.create(
+            agenda=agenda,
+            parent=parent,
+            title=title,
+            description=description,
+            item_type=item_type,
+            sort_order=agenda.next_sort_order(),
+        )
+
+    def _create_resolution_agenda_item(self, meeting, admin):
+        """Create a proposed resolution and link it to a resolution TOP."""
+        resolution = Resolution.objects.create(
+            committee=meeting.committee,
+            title=random.choice(
+                [
+                    "Anschaffung zusätzlicher Bildschirmarbeitsplätze",
+                    "Beauftragung einer Schulung zum Arbeits- und Gesundheitsschutz",
+                    "Einrichtung regelmäßiger Sprechstunden des Betriebsrats",
+                ]
+            ),
+            description="Vorbereiteter Beschlussvorschlag für die Beratung in der Sitzung.",
+            proposal="Der Betriebsrat beschließt die Umsetzung der dargestellten Maßnahme.",
+            justification="Die Maßnahme unterstützt die ordnungsgemäße Betriebsratsarbeit und die Interessenvertretung der Beschäftigten.",
+            status="PROPOSED",
+            created_by=admin,
+        )
+        agenda_item = self._create_agenda_item(
+            meeting.agenda,
+            resolution.title,
+            resolution.description,
+            item_type=AgendaItem.TYPE_RESOLUTION,
+        )
+        ResolutionAgendaItem.objects.create(
+            agenda_item=agenda_item,
+            resolution=resolution,
+        )
+
+        return resolution
+
+    def _create_election_agenda_item(self, meeting, admin):
+        """Create a published person election with candidates."""
+        agenda_item = self._create_agenda_item(
+            meeting.agenda,
+            "Wahl einer Vertretung für den Arbeitsschutzausschuss",
+            "Vorbereitung und Durchführung einer Personenwahl aus der Mitte des Gremiums.",
+            item_type=AgendaItem.TYPE_ELECTION,
+        )
+        election = Election.objects.create(
+            agenda_item=agenda_item,
+            majority_type=random.choice(
+                [Election.MAJORITY_ABSOLUTE, Election.MAJORITY_RELATIVE]
+            ),
+        )
+        candidate_names = self._candidate_names_for_meeting(meeting)
+        for index, name in enumerate(candidate_names, start=1):
+            ElectionCandidate.objects.create(
+                election=election,
+                name=name,
+                sort_order=index,
+            )
+        election.publish()
+
+        return election
+
+    def _candidate_names_for_meeting(self, meeting):
+        """Return up to three committee member names as election candidates."""
+        names = list(
+            meeting.committee.get_active_members()
+            .select_related("user")
+            .order_by("user__last_name", "user__first_name")
+            .values_list("user__first_name", "user__last_name")[:3]
+        )
+        candidate_names = [f"{first_name} {last_name}" for first_name, last_name in names]
+        while len(candidate_names) < 2:
+            candidate_names.append(self.fake.name())
+        return candidate_names
+
+    def _seed_invited_at(self, meeting):
+        """Return a realistic non-future invitation timestamp for seeded meetings."""
+        planned = timezone.make_aware(
+            datetime.combine(meeting.date - timedelta(days=5), dt_time(10, 0))
+        )
+        now = timezone.now()
+        if planned > now:
+            return now - timedelta(days=1)
+        return planned
+
+    def _record_completed_workflow_results(self, meeting, admin, agenda_seeded):
+        """Run completed seed data through workflow/result services for side effects."""
+        meeting.status = "SENT"
+        meeting.sent_at = self._seed_invited_at(meeting)
+        meeting.save(update_fields=["status", "sent_at", "updated_at"])
+
+        MeetingWorkflowService.start_meeting(meeting, actor=admin)
+        meeting.actual_start_date = meeting.date
+        meeting.actual_start_time = dt_time(9, 5)
+        meeting.save(
+            update_fields=["actual_start_date", "actual_start_time", "updated_at"]
+        )
+
+        eligible_voters = current_voting_participants(meeting).count()
+        if eligible_voters <= 0:
+            return
+
+        for resolution in agenda_seeded["resolutions"]:
+            link = resolution.agenda_items.select_related("agenda_item").first()
+            if not link:
+                continue
+            meeting.current_agenda_item = link.agenda_item
+            meeting.save(update_fields=["current_agenda_item", "updated_at"])
+            yes_votes = (eligible_voters // 2) + 1
+            remaining_votes = eligible_voters - yes_votes
+            no_votes = remaining_votes // 2
+            abstentions = remaining_votes - no_votes
+            ResolutionDecisionService.record_result(
+                resolution_agenda_item=link,
+                yes_votes=yes_votes,
+                no_votes=no_votes,
+                abstentions=abstentions,
+                is_quorate=True,
+                decision_text=(
+                    f"Der Beschluss wurde mit {yes_votes} Ja-Stimmen, "
+                    f"{no_votes} Nein-Stimmen und {abstentions} Enthaltungen angenommen."
+                ),
+                actor=admin,
+            )
+
+        for election in agenda_seeded["elections"]:
+            meeting.current_agenda_item = election.agenda_item
+            meeting.save(update_fields=["current_agenda_item", "updated_at"])
+            candidates = list(election.candidates.order_by("sort_order", "name"))
+            if not candidates:
+                continue
+            winner = candidates[0]
+            winner_votes = (eligible_voters // 2) + 1
+            remaining_votes = eligible_voters - winner_votes
+            candidate_votes = {winner.pk: winner_votes}
+            for candidate in candidates[1:]:
+                votes = (
+                    remaining_votes // (len(candidates) - 1)
+                    if len(candidates) > 1
+                    else 0
+                )
+                candidate_votes[candidate.pk] = votes
+                remaining_votes -= votes
+            if candidates[1:] and remaining_votes > 0:
+                candidate_votes[candidates[-1].pk] += remaining_votes
+            ElectionResultService.record_result(
+                election=election,
+                candidate_votes=candidate_votes,
+                elected_candidate_ids={winner.pk},
+                is_quorate=True,
+                invalid_votes=0,
+                actor=admin,
+            )
+
+        MeetingWorkflowService.complete_meeting(meeting, actor=admin)
+        meeting.actual_end_date = meeting.date
+        meeting.actual_end_time = dt_time(12, 20)
+        meeting.is_quorate = True
+        meeting.current_agenda_item = meeting.agenda.items.order_by("-sort_order").first()
+        meeting.save(
+            update_fields=[
+                "actual_end_date",
+                "actual_end_time",
+                "is_quorate",
+                "current_agenda_item",
+                "updated_at",
+            ]
+        )
+
+    def _finalize_seed_meeting(self, meeting):
+        """Move a planned meeting to SENT after editable data was created."""
+        meeting.sent_at = self._seed_invited_at(meeting)
+        meeting.status = "SENT"
+        meeting.is_quorate = None
+        meeting.save()
     
     def _verify_minority_quota(self, committee, members):
         """Verify that minority gender quota is met."""
@@ -905,7 +1425,7 @@ class Command(BaseCommand):
             'substitute_members': main_committee.get_active_substitutes().count(),
         }
     
-    def _show_summary(self, admin, users, committees_data=None):
+    def _show_summary(self, admin, users, committees_data=None, workflow_data=None):
         """Show summary of created users."""
         self.stdout.write("\n" + "=" * 60)
         self.stdout.write(self.style.HTTP_INFO("  CREATED USERS"))
@@ -945,7 +1465,27 @@ class Command(BaseCommand):
             self.stdout.write(f"\n  {self.style.SUCCESS('Total:')}")
             self.stdout.write(f"    * Total committees: {len(committees_data['subcommittees']) + 1}")
             self.stdout.write(f"    * Total memberships: {committees_data['total_memberships']}")
-            
+             
+            self.stdout.write("")
+
+        if workflow_data:
+            self.stdout.write("\n" + "=" * 60)
+            self.stdout.write(self.style.HTTP_INFO("  CREATED MEETING WORKFLOWS"))
+            self.stdout.write("=" * 60)
+
+            for meeting in workflow_data["meetings"]:
+                self.stdout.write(
+                    f"    * {meeting.meeting_number}: {meeting.title} "
+                    f"({meeting.date}, {meeting.get_status_display()})"
+                )
+
+            self.stdout.write(f"\n  {self.style.SUCCESS('Workflow totals:')}")
+            self.stdout.write(f"    * Meetings: {len(workflow_data['meetings'])}")
+            self.stdout.write(f"    * Resolutions: {len(workflow_data['resolutions'])}")
+            self.stdout.write(f"    * Elections: {len(workflow_data['elections'])}")
+            self.stdout.write(f"    * Participants: {workflow_data['participants']}")
+            self.stdout.write(f"    * Substitute assignments: {workflow_data['substitutions']}")
+            self.stdout.write(f"    * Attendance events: {workflow_data['attendance_events']}")
             self.stdout.write("")
 
     def _show_totp_info(self):
