@@ -126,6 +126,11 @@ class MeetingParticipant(models.Model):
         blank=True,
         verbose_name="Zuletzt selbst bestätigt",
     )
+    last_written_confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Zuletzt schriftlich bestätigt",
+    )
     last_notified_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -167,17 +172,23 @@ class MeetingParticipant(models.Model):
     def clean(self) -> None:
         """Validate participant state."""
         if not self.membership_id:
-            raise ValidationError({"membership": "Eine Mitgliedschaft ist erforderlich."})
+            raise ValidationError(
+                {"membership": "Eine Mitgliedschaft ist erforderlich."}
+            )
 
         if self.substitute_membership_id:
             if self.substitute_membership.committee_id != self.meeting.committee_id:
-                raise ValidationError({
-                    "substitute_membership": "Ersatzmitglied muss zum Gremium der Sitzung gehören."
-                })
+                raise ValidationError(
+                    {
+                        "substitute_membership": "Ersatzmitglied muss zum Gremium der Sitzung gehören."
+                    }
+                )
             if self.substitute_membership.member_type != "SUBSTITUTE":
-                raise ValidationError({
-                    "substitute_membership": "Ausgewählte Person ist kein Ersatzmitglied."
-                })
+                raise ValidationError(
+                    {
+                        "substitute_membership": "Ausgewählte Person ist kein Ersatzmitglied."
+                    }
+                )
 
     @property
     def is_active_for_invitation(self) -> bool:
@@ -206,7 +217,9 @@ class MeetingParticipant(models.Model):
     def role_for_display(self) -> str:
         """Return role/function derived from membership or participant type."""
         if self.membership_id:
-            role_name = self.membership.role.name if self.membership.role else "Ohne Rolle"
+            role_name = (
+                self.membership.role.name if self.membership.role else "Ohne Rolle"
+            )
             if self.membership.committee_id != self.meeting.committee_id:
                 return f"{role_name} ({self.membership.committee.name})"
             return role_name
@@ -308,13 +321,20 @@ class MeetingAttendanceEvent(models.Model):
         related_name="meeting_attendance_events",
         verbose_name="Akteur",
     )
-    event_type = models.CharField(max_length=40, choices=EVENT_TYPE_CHOICES, verbose_name="Ereignis")
+    event_type = models.CharField(
+        max_length=40, choices=EVENT_TYPE_CHOICES, verbose_name="Ereignis"
+    )
     occurred_at = models.DateTimeField(default=timezone.now, verbose_name="Zeitpunkt")
     method = models.CharField(
         max_length=20,
         choices=METHOD_CHOICES,
         default=METHOD_SELF,
         verbose_name="Methode",
+    )
+    written_confirmation = models.TextField(
+        blank=True,
+        verbose_name="Schriftliche Anwesenheitsbestätigung",
+        help_text="Vom Teilnehmer eingegebene Erklärung zur persönlichen Anwesenheit.",
     )
     metadata = models.JSONField(default=dict, blank=True, verbose_name="Metadaten")
 

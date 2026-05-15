@@ -16,6 +16,8 @@ from apps.email_templates.models import EmailTemplate, RenderedEmail
 from apps.meetings.models import Meeting
 from apps.participants.models import MeetingAttendanceEvent, MeetingParticipant
 
+WRITTEN_CONFIRMATION_MAX_LENGTH = 500
+
 
 class ParticipantAction:
     """Internal action labels for service notes after history removal."""
@@ -40,8 +42,14 @@ def participant_snapshot(participant: MeetingParticipant) -> dict:
             if participant.substitute_membership_id
             else ""
         ),
-        "invite_sent_at": participant.invite_sent_at.isoformat() if participant.invite_sent_at else "",
-        "last_notified_at": participant.last_notified_at.isoformat() if participant.last_notified_at else "",
+        "invite_sent_at": (
+            participant.invite_sent_at.isoformat() if participant.invite_sent_at else ""
+        ),
+        "last_notified_at": (
+            participant.last_notified_at.isoformat()
+            if participant.last_notified_at
+            else ""
+        ),
         "attendance_status": participant.attendance_status,
         "last_attendance_event_at": (
             participant.last_attendance_event_at.isoformat()
@@ -55,7 +63,9 @@ def loaded_participant_for_user(meeting: Meeting, user) -> MeetingParticipant | 
     """Return the participant row that loads the user into the meeting."""
     if not getattr(user, "is_authenticated", False):
         return None
-    participants = meeting.participants.exclude(status=MeetingParticipant.STATUS_CANCELLED).select_related(
+    participants = meeting.participants.exclude(
+        status=MeetingParticipant.STATUS_CANCELLED
+    ).select_related(
         "meeting",
         "membership",
         "membership__user",
@@ -81,11 +91,20 @@ def user_is_loaded_participant(meeting: Meeting, user) -> bool:
 
 
 @transaction.atomic
-def confirm_presence(meeting: Meeting, user, method: str = MeetingAttendanceEvent.METHOD_SELF) -> MeetingParticipant:
+def confirm_presence(
+    meeting: Meeting,
+    user,
+    method: str = MeetingAttendanceEvent.METHOD_SELF,
+    *,
+    written_confirmation: str = "",
+) -> MeetingParticipant:
     """Mark the current user present for the in-progress meeting."""
     participant = _get_loaded_participant_or_raise(meeting, user)
     if meeting.status != "IN_PROGRESS":
-        raise ValidationError("Anwesenheit kann nur während einer laufenden Sitzung bestätigt werden.")
+        raise ValidationError(
+            "Anwesenheit kann nur während einer laufenden Sitzung bestätigt werden."
+        )
+    normalized_confirmation = _normalize_written_confirmation(written_confirmation)
     _record_attendance_event(
         participant=participant,
         actor=user,
@@ -93,6 +112,7 @@ def confirm_presence(meeting: Meeting, user, method: str = MeetingAttendanceEven
         attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
         method=method,
         set_self_confirmed=True,
+        written_confirmation=normalized_confirmation,
     )
     return participant
 
@@ -103,13 +123,17 @@ def reconfirm_presence(
     user,
     *,
     password: str,
+    written_confirmation: str,
     code: str = "",
     use_recovery: bool = False,
 ) -> MeetingParticipant:
     """Re-confirm a loaded participant with password and 2FA when enabled."""
     participant = _get_loaded_participant_or_raise(meeting, user)
     if meeting.status != "IN_PROGRESS":
-        raise ValidationError("Sitzungen können nur während einer laufenden Sitzung bestätigt werden.")
+        raise ValidationError(
+            "Sitzungen können nur während einer laufenden Sitzung bestätigt werden."
+        )
+    normalized_confirmation = _normalize_written_confirmation(written_confirmation)
     if not authenticate(username=user.email, password=password):
         raise ValidationError("Passwort oder Bestätigungscode ist ungültig.")
 
@@ -128,13 +152,21 @@ def reconfirm_presence(
                 raise ValidationError("2FA-Code ist ungültig.")
             method = MeetingAttendanceEvent.METHOD_TOTP
 
+    # Use EVENT_RETURNED for participants who are currently LEFT, otherwise EVENT_RECONFIRMED
+    event_type = (
+        MeetingAttendanceEvent.EVENT_RETURNED
+        if participant.attendance_status == MeetingParticipant.ATTENDANCE_LEFT
+        else MeetingAttendanceEvent.EVENT_RECONFIRMED
+    )
+
     _record_attendance_event(
         participant=participant,
         actor=user,
-        event_type=MeetingAttendanceEvent.EVENT_RECONFIRMED,
+        event_type=event_type,
         attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
         method=method,
         set_self_confirmed=True,
+        written_confirmation=normalized_confirmation,
     )
     return participant
 
@@ -144,7 +176,9 @@ def mark_self_left(meeting: Meeting, user) -> MeetingParticipant:
     """Mark the current loaded participant as temporarily absent."""
     participant = _get_loaded_participant_or_raise(meeting, user)
     if meeting.status != "IN_PROGRESS":
-        raise ValidationError("Abwesenheit kann nur während einer laufenden Sitzung gesetzt werden.")
+        raise ValidationError(
+            "Abwesenheit kann nur während einer laufenden Sitzung gesetzt werden."
+        )
     _ensure_self_confirmed(participant)
     _record_attendance_event(
         participant=participant,
@@ -157,42 +191,57 @@ def mark_self_left(meeting: Meeting, user) -> MeetingParticipant:
 
 
 @transaction.atomic
-def mark_self_returned(meeting: Meeting, user) -> MeetingParticipant:
+def mark_self_returned(
+    meeting: Meeting,
+    user,
+    *,
+    written_confirmation: str = "",
+) -> MeetingParticipant:
     """Mark the current loaded participant as present again."""
     participant = _get_loaded_participant_or_raise(meeting, user)
     if meeting.status != "IN_PROGRESS":
-        raise ValidationError("Rückkehr kann nur während einer laufenden Sitzung gesetzt werden.")
+        raise ValidationError(
+            "Rückkehr kann nur während einer laufenden Sitzung gesetzt werden."
+        )
     _ensure_self_confirmed(participant)
+    normalized_confirmation = _normalize_written_confirmation(written_confirmation)
     _record_attendance_event(
         participant=participant,
         actor=user,
         event_type=MeetingAttendanceEvent.EVENT_RETURNED,
         attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
         method=MeetingAttendanceEvent.METHOD_SELF,
+        written_confirmation=normalized_confirmation,
     )
     return participant
 
 
 def current_voting_participants(meeting: Meeting):
     """Return participants currently marked present for quorum snapshots."""
-    return meeting.participants.filter(
-        attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
-    ).exclude(
-        participant_type=MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL,
-    ).filter(
-        Q(
-            status__in=MeetingParticipant.ACTIVE_STATUSES,
-            substitute_membership__isnull=True,
-            membership__committee=meeting.committee,
-            membership__member_type="REGULAR",
-            membership__is_active=True,
+    return (
+        meeting.participants.filter(
+            attendance_status=MeetingParticipant.ATTENDANCE_PRESENT,
+            last_self_confirmed_at__isnull=False,
+            last_written_confirmed_at__isnull=False,
         )
-        | Q(
-            status=MeetingParticipant.STATUS_ABSENT,
-            substitute_membership__isnull=False,
-            substitute_membership__committee=meeting.committee,
-            substitute_membership__member_type="SUBSTITUTE",
-            substitute_membership__is_active=True,
+        .exclude(
+            participant_type=MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL,
+        )
+        .filter(
+            Q(
+                status__in=MeetingParticipant.ACTIVE_STATUSES,
+                substitute_membership__isnull=True,
+                membership__committee=meeting.committee,
+                membership__member_type="REGULAR",
+                membership__is_active=True,
+            )
+            | Q(
+                status=MeetingParticipant.STATUS_ABSENT,
+                substitute_membership__isnull=False,
+                substitute_membership__committee=meeting.committee,
+                substitute_membership__member_type="SUBSTITUTE",
+                substitute_membership__is_active=True,
+            )
         )
     )
 
@@ -201,6 +250,7 @@ def _reset_attendance_confirmation(participant: MeetingParticipant) -> None:
     """Clear row-level live presence after the loaded voting identity changes."""
     participant.attendance_status = MeetingParticipant.ATTENDANCE_NOT_CONFIRMED
     participant.last_self_confirmed_at = None
+    participant.last_written_confirmed_at = None
     participant.last_attendance_event_at = None
 
 
@@ -214,12 +264,14 @@ def attendance_timeline_for_meeting(meeting: Meeting) -> list[dict]:
     ).order_by("occurred_at", "id")
     return [
         {
+            "event_id": str(event.pk),
             "participant_id": str(event.participant_id),
             "participant_name": event.participant.display_name_for_display,
             "event_type": event.event_type,
             "occurred_at": event.occurred_at.isoformat(),
             "method": event.method,
             "actor_id": str(event.actor_id) if event.actor_id else "",
+            "has_written_confirmation": bool(event.written_confirmation),
         }
         for event in events
     ]
@@ -227,16 +279,20 @@ def attendance_timeline_for_meeting(meeting: Meeting) -> list[dict]:
 
 def attendance_periods_by_participant(meeting: Meeting) -> dict:
     """Return present intervals keyed by participant id for completed meeting summaries."""
-    events = meeting.attendance_events.select_related("participant").order_by("occurred_at", "id")
+    events = meeting.attendance_events.select_related("participant").order_by(
+        "occurred_at", "id"
+    )
     active_starts = {}
     periods = {}
     for event in events:
         participant_id = event.participant_id
+        # Accept presence events with written confirmation OR legacy pre-requirement events
+        is_legacy = event.metadata.get("legacy_pre_written_confirmation", False)
         if event.event_type in [
             MeetingAttendanceEvent.EVENT_CONFIRMED_PRESENT,
             MeetingAttendanceEvent.EVENT_RECONFIRMED,
             MeetingAttendanceEvent.EVENT_RETURNED,
-        ]:
+        ] and (event.written_confirmation or is_legacy):
             active_starts.setdefault(participant_id, event.occurred_at)
         elif event.event_type in [
             MeetingAttendanceEvent.EVENT_LEFT,
@@ -244,7 +300,9 @@ def attendance_periods_by_participant(meeting: Meeting) -> dict:
         ]:
             start = active_starts.pop(participant_id, None)
             if start:
-                periods.setdefault(participant_id, []).append((start, event.occurred_at))
+                periods.setdefault(participant_id, []).append(
+                    (start, event.occurred_at)
+                )
 
     end = timezone.now()
     actual_end_at = meeting.get_actual_end_datetime()
@@ -265,14 +323,31 @@ def _get_loaded_participant_or_raise(meeting: Meeting, user) -> MeetingParticipa
 
 def _ensure_self_confirmed(participant: MeetingParticipant) -> None:
     """Require meeting-scoped re-confirmation before self-service attendance changes."""
-    if not participant.last_self_confirmed_at:
+    if (
+        not participant.last_self_confirmed_at
+        or not participant.last_written_confirmed_at
+    ):
         raise ValidationError("Bitte bestätigen Sie die Sitzung zuerst erneut.")
+
+
+def _normalize_written_confirmation(written_confirmation: str) -> str:
+    """Return a non-empty written attendance statement or raise validation error."""
+    normalized_confirmation = (written_confirmation or "").strip()
+    if not normalized_confirmation:
+        raise ValidationError("Bitte bestätigen Sie Ihre Anwesenheit schriftlich.")
+    if len(normalized_confirmation) > WRITTEN_CONFIRMATION_MAX_LENGTH:
+        raise ValidationError(
+            f"Die schriftliche Bestätigung darf maximal {WRITTEN_CONFIRMATION_MAX_LENGTH} Zeichen enthalten."
+        )
+    return normalized_confirmation
 
 
 def _ensure_participant_planning_open(meeting: Meeting) -> None:
     """Block participant planning mutations after a meeting has been completed."""
     if meeting.status == "COMPLETED":
-        raise ValidationError("Teilnehmer können nach Sitzungsabschluss nicht mehr geändert werden.")
+        raise ValidationError(
+            "Teilnehmer können nach Sitzungsabschluss nicht mehr geändert werden."
+        )
 
 
 def _record_attendance_event(
@@ -283,6 +358,7 @@ def _record_attendance_event(
     attendance_status: str,
     method: str,
     set_self_confirmed: bool = False,
+    written_confirmation: str = "",
 ) -> MeetingAttendanceEvent:
     """Persist one attendance event and denormalize current status."""
     event = MeetingAttendanceEvent.objects.create(
@@ -291,6 +367,7 @@ def _record_attendance_event(
         actor=actor if getattr(actor, "is_authenticated", False) else None,
         event_type=event_type,
         method=method,
+        written_confirmation=written_confirmation,
     )
     participant.attendance_status = attendance_status
     participant.last_attendance_event_at = event.occurred_at
@@ -298,6 +375,9 @@ def _record_attendance_event(
     if set_self_confirmed:
         participant.last_self_confirmed_at = event.occurred_at
         update_fields.append("last_self_confirmed_at")
+    if written_confirmation:
+        participant.last_written_confirmed_at = event.occurred_at
+        update_fields.append("last_written_confirmed_at")
     participant.save(update_fields=update_fields)
     from apps.audit.models import AuditEntry
     from apps.audit.services import create_audit_entry
@@ -312,6 +392,7 @@ def _record_attendance_event(
             "attendance_status": attendance_status,
             "occurred_at": event.occurred_at.isoformat(),
             "method": method,
+            "has_written_confirmation": bool(written_confirmation),
         },
     )
     return event
@@ -394,7 +475,10 @@ def add_participant(
             changed_by=changed_by,
         )
 
-    if _meeting_invitations_are_active(meeting) and participant.is_active_for_invitation:
+    if (
+        _meeting_invitations_are_active(meeting)
+        and participant.is_active_for_invitation
+    ):
         send_agenda_mail(participant)
 
     return participant
@@ -407,15 +491,22 @@ def _validate_additional_membership(meeting: Meeting, membership: Membership) ->
     if not membership.is_active or membership.deleted_at:
         raise ValidationError("Die ausgewählte Mitgliedschaft ist nicht aktiv.")
     if membership.committee_id not in related_committee_ids(meeting):
-        raise ValidationError("Die ausgewählte Mitgliedschaft gehört nicht zum zulässigen Gremienkreis.")
-    already_invited_user = MeetingParticipant.objects.filter(
-        meeting=meeting,
-    ).exclude(
-        status=MeetingParticipant.STATUS_CANCELLED,
-    ).filter(
-        Q(membership__user_id=membership.user_id)
-        | Q(substitute_membership__user_id=membership.user_id)
-    ).exists()
+        raise ValidationError(
+            "Die ausgewählte Mitgliedschaft gehört nicht zum zulässigen Gremienkreis."
+        )
+    already_invited_user = (
+        MeetingParticipant.objects.filter(
+            meeting=meeting,
+        )
+        .exclude(
+            status=MeetingParticipant.STATUS_CANCELLED,
+        )
+        .filter(
+            Q(membership__user_id=membership.user_id)
+            | Q(substitute_membership__user_id=membership.user_id)
+        )
+        .exists()
+    )
     if already_invited_user:
         raise ValidationError("Diese Person ist für diese Sitzung bereits eingeplant.")
 
@@ -423,7 +514,9 @@ def _validate_additional_membership(meeting: Meeting, membership: Membership) ->
 def related_committee_ids(meeting: Meeting) -> list:
     """Return committee IDs eligible for additional participants."""
     committee = meeting.committee
-    root_committee_id = committee.id if committee.committee_type == "MAIN" else committee.parent_id
+    root_committee_id = (
+        committee.id if committee.committee_type == "MAIN" else committee.parent_id
+    )
     if not root_committee_id:
         return [committee.id]
     from apps.committees.models import Committee
@@ -439,15 +532,19 @@ def related_committee_ids(meeting: Meeting) -> list:
 
 def _initial_memberships(meeting: Meeting) -> QuerySet[Membership]:
     """Return memberships that should become initial participants."""
-    return Membership.objects.filter(
-        committee=meeting.committee,
-        is_active=True,
-        deleted_at__isnull=True,
-        member_type__in=["REGULAR", "EXTERNAL"],
-    ).select_related("user", "role").order_by(
-        "role__sort_order",
-        "user__last_name",
-        "user__first_name",
+    return (
+        Membership.objects.filter(
+            committee=meeting.committee,
+            is_active=True,
+            deleted_at__isnull=True,
+            member_type__in=["REGULAR", "EXTERNAL"],
+        )
+        .select_related("user", "role")
+        .order_by(
+            "role__sort_order",
+            "user__last_name",
+            "user__first_name",
+        )
     )
 
 
@@ -466,17 +563,22 @@ def suggest_substitute(
         ).first()
 
     membership = excluded_participant.membership
-    substitutes = list(_available_substitute_queryset(meeting, excluded_participant).filter(
-        election_list_name=membership.election_list_name,
-    ).exclude(
-        user=membership.user,
-    ))
+    substitutes = list(
+        _available_substitute_queryset(meeting, excluded_participant)
+        .filter(
+            election_list_name=membership.election_list_name,
+        )
+        .exclude(
+            user=membership.user,
+        )
+    )
     if not substitutes:
         return None
 
     current_max_position = _current_max_position_for_list(membership)
     eligible_substitutes = [
-        substitute for substitute in substitutes
+        substitute
+        for substitute in substitutes
         if substitute.election_list_position
         and substitute.election_list_position > current_max_position
     ]
@@ -499,20 +601,27 @@ def available_substitutes_for_participant(
     participant: MeetingParticipant,
 ) -> list[Membership]:
     """Return selectable substitute memberships in fair rotation order."""
-    all_substitutes = list(_available_substitute_queryset(
-        participant.meeting,
-        participant,
-    ))
+    all_substitutes = list(
+        _available_substitute_queryset(
+            participant.meeting,
+            participant,
+        )
+    )
     if not all_substitutes:
         return []
 
     lists_data = {}
     for substitute in all_substitutes:
         list_name = substitute.election_list_name or "Ohne Liste"
-        lists_data.setdefault(list_name, {
-            "members": [],
-            "current_max_position": 0,
-        })["members"].append(substitute)
+        lists_data.setdefault(
+            list_name,
+            {
+                "members": [],
+                "current_max_position": 0,
+            },
+        )[
+            "members"
+        ].append(substitute)
 
     for data in lists_data.values():
         data["members"].sort(key=_substitute_sort_key)
@@ -557,7 +666,8 @@ def available_substitutes_for_participant(
             break
 
     remaining = [
-        substitute for substitute in all_substitutes
+        substitute
+        for substitute in all_substitutes
         if substitute not in sorted_substitutes
     ]
     sorted_substitutes.extend(sorted(remaining, key=lambda item: item.user.last_name))
@@ -569,28 +679,40 @@ def _available_substitute_queryset(
     participant: MeetingParticipant | None = None,
 ) -> QuerySet[Membership]:
     """Return available substitute queryset excluding already planned participants."""
-    used_membership_ids = MeetingParticipant.objects.filter(
-        meeting=meeting,
-        membership_id__isnull=False,
-    ).exclude(
-        status=MeetingParticipant.STATUS_CANCELLED,
-    ).values_list("membership_id", flat=True)
-    used_substitute_ids = MeetingParticipant.objects.filter(
-        meeting=meeting,
-        substitute_membership_id__isnull=False,
-    ).exclude(
-        status=MeetingParticipant.STATUS_CANCELLED,
-    ).values_list("substitute_membership_id", flat=True)
+    used_membership_ids = (
+        MeetingParticipant.objects.filter(
+            meeting=meeting,
+            membership_id__isnull=False,
+        )
+        .exclude(
+            status=MeetingParticipant.STATUS_CANCELLED,
+        )
+        .values_list("membership_id", flat=True)
+    )
+    used_substitute_ids = (
+        MeetingParticipant.objects.filter(
+            meeting=meeting,
+            substitute_membership_id__isnull=False,
+        )
+        .exclude(
+            status=MeetingParticipant.STATUS_CANCELLED,
+        )
+        .values_list("substitute_membership_id", flat=True)
+    )
 
-    substitutes = Membership.objects.filter(
-        committee=meeting.committee,
-        is_active=True,
-        deleted_at__isnull=True,
-        member_type="SUBSTITUTE",
-    ).exclude(
-        id__in=used_membership_ids,
-    ).exclude(
-        id__in=used_substitute_ids,
+    substitutes = (
+        Membership.objects.filter(
+            committee=meeting.committee,
+            is_active=True,
+            deleted_at__isnull=True,
+            member_type="SUBSTITUTE",
+        )
+        .exclude(
+            id__in=used_membership_ids,
+        )
+        .exclude(
+            id__in=used_substitute_ids,
+        )
     )
 
     if participant and participant.substitute_membership_id:
@@ -603,15 +725,19 @@ def _available_substitute_queryset(
 
 def _current_max_position_for_list(membership: Membership) -> int:
     """Return highest active regular position in the same list excluding membership."""
-    result = Membership.objects.filter(
-        committee=membership.committee,
-        member_type="REGULAR",
-        is_active=True,
-        deleted_at__isnull=True,
-        election_list_name=membership.election_list_name,
-    ).exclude(
-        user=membership.user,
-    ).aggregate(max_pos=Max("election_list_position"))
+    result = (
+        Membership.objects.filter(
+            committee=membership.committee,
+            member_type="REGULAR",
+            is_active=True,
+            deleted_at__isnull=True,
+            election_list_name=membership.election_list_name,
+        )
+        .exclude(
+            user=membership.user,
+        )
+        .aggregate(max_pos=Max("election_list_position"))
+    )
     return result.get("max_pos") or 0
 
 
@@ -625,20 +751,25 @@ def _minority_substitute_if_required(
     if not committee.minority_gender or not committee.minority_min_count:
         return None
 
-    current_minority_count = Membership.objects.filter(
-        committee=committee,
-        member_type="REGULAR",
-        is_active=True,
-        deleted_at__isnull=True,
-        user__gender=committee.minority_gender,
-    ).exclude(
-        user=membership.user,
-    ).count()
+    current_minority_count = (
+        Membership.objects.filter(
+            committee=committee,
+            member_type="REGULAR",
+            is_active=True,
+            deleted_at__isnull=True,
+            user__gender=committee.minority_gender,
+        )
+        .exclude(
+            user=membership.user,
+        )
+        .count()
+    )
     if current_minority_count >= committee.minority_min_count:
         return None
 
     minority_substitutes = [
-        substitute for substitute in substitutes
+        substitute
+        for substitute in substitutes
         if substitute.user.gender == committee.minority_gender
     ]
     minority_substitutes.sort(key=_substitute_sort_key)
@@ -648,7 +779,11 @@ def _minority_substitute_if_required(
 def _substitute_sort_key(membership: Membership) -> tuple:
     """Return substitute ordering key matching committee replacement."""
     return (
-        membership.election_list_position if membership.election_list_position else float("inf"),
+        (
+            membership.election_list_position
+            if membership.election_list_position
+            else float("inf")
+        ),
         -(membership.election_votes if membership.election_votes else 0),
         membership.user.last_name,
         membership.user.first_name,
@@ -675,7 +810,11 @@ def mark_absent(
     previous_substitute = participant.substitute_membership
     participant.absence_reason = absence_reason
     participant.nachladefaehig = nachladefaehig
-    participant.status = MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED if nachladefaehig else MeetingParticipant.STATUS_ABSENT
+    participant.status = (
+        MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
+        if nachladefaehig
+        else MeetingParticipant.STATUS_ABSENT
+    )
 
     log_participant_change(
         participant,
@@ -695,16 +834,19 @@ def mark_absent(
         participant.substitute_membership = None
         participant.status = MeetingParticipant.STATUS_ABSENT
         _reset_attendance_confirmation(participant)
-        participant.save(update_fields=[
-            "absence_reason",
-            "nachladefaehig",
-            "substitute_membership",
-            "status",
-            "attendance_status",
-            "last_self_confirmed_at",
-            "last_attendance_event_at",
-            "updated_at",
-        ])
+        participant.save(
+            update_fields=[
+                "absence_reason",
+                "nachladefaehig",
+                "substitute_membership",
+                "status",
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "last_attendance_event_at",
+                "updated_at",
+            ]
+        )
         return None
 
     substitute = suggest_substitute(participant.meeting, participant)
@@ -730,31 +872,37 @@ def mark_absent(
         participant.substitute_membership = previous_substitute
         participant.status = MeetingParticipant.STATUS_ABSENT
         _reset_attendance_confirmation(participant)
-        participant.save(update_fields=[
+        participant.save(
+            update_fields=[
+                "absence_reason",
+                "nachladefaehig",
+                "substitute_membership",
+                "status",
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "last_attendance_event_at",
+                "updated_at",
+            ]
+        )
+        return previous_substitute
+
+    participant.substitute_membership = None
+    participant.status = MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
+    _reset_attendance_confirmation(participant)
+    participant.save(
+        update_fields=[
             "absence_reason",
             "nachladefaehig",
             "substitute_membership",
             "status",
             "attendance_status",
             "last_self_confirmed_at",
+            "last_written_confirmed_at",
             "last_attendance_event_at",
             "updated_at",
-        ])
-        return previous_substitute
-
-    participant.substitute_membership = None
-    participant.status = MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
-    _reset_attendance_confirmation(participant)
-    participant.save(update_fields=[
-        "absence_reason",
-        "nachladefaehig",
-        "substitute_membership",
-        "status",
-        "attendance_status",
-        "last_self_confirmed_at",
-        "last_attendance_event_at",
-        "updated_at",
-    ])
+        ]
+    )
 
     return substitute
 
@@ -783,15 +931,18 @@ def remove_absence(
         else MeetingParticipant.STATUS_CREATED
     )
     _reset_attendance_confirmation(participant)
-    participant.save(update_fields=[
-        "absence_reason",
-        "nachladefaehig",
-        "status",
-        "attendance_status",
-        "last_self_confirmed_at",
-        "last_attendance_event_at",
-        "updated_at",
-    ])
+    participant.save(
+        update_fields=[
+            "absence_reason",
+            "nachladefaehig",
+            "status",
+            "attendance_status",
+            "last_self_confirmed_at",
+            "last_written_confirmed_at",
+            "last_attendance_event_at",
+            "updated_at",
+        ]
+    )
     log_participant_change(
         participant,
         ParticipantAction.ACTION_REACTIVATED,
@@ -822,16 +973,19 @@ def remove_substitute(
         else MeetingParticipant.STATUS_CREATED
     )
     _reset_attendance_confirmation(participant)
-    participant.save(update_fields=[
-        "substitute_membership",
-        "absence_reason",
-        "nachladefaehig",
-        "status",
-        "attendance_status",
-        "last_self_confirmed_at",
-        "last_attendance_event_at",
-        "updated_at",
-    ])
+    participant.save(
+        update_fields=[
+            "substitute_membership",
+            "absence_reason",
+            "nachladefaehig",
+            "status",
+            "attendance_status",
+            "last_self_confirmed_at",
+            "last_written_confirmed_at",
+            "last_attendance_event_at",
+            "updated_at",
+        ]
+    )
     if _meeting_invitations_are_active(participant.meeting):
         send_agenda_mail(participant)
 
@@ -850,22 +1004,27 @@ def confirm_substitute(
         participant.status = MeetingParticipant.STATUS_ABSENT
         participant.nachladefaehig = True
         _reset_attendance_confirmation(participant)
-        participant.save(update_fields=[
-            "absence_reason",
-            "status",
-            "nachladefaehig",
-            "attendance_status",
-            "last_self_confirmed_at",
-            "last_attendance_event_at",
-            "updated_at",
-        ])
+        participant.save(
+            update_fields=[
+                "absence_reason",
+                "status",
+                "nachladefaehig",
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "last_attendance_event_at",
+                "updated_at",
+            ]
+        )
         return substitute_membership
 
     if participant.status not in [
         MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED,
         MeetingParticipant.STATUS_ABSENT,
     ]:
-        raise ValidationError("Ersatz kann nur für nachladefähige Abwesenheiten bestätigt werden.")
+        raise ValidationError(
+            "Ersatz kann nur für nachladefähige Abwesenheiten bestätigt werden."
+        )
 
     previous_substitute = previous_substitute or participant.substitute_membership
     _validate_substitute_membership(
@@ -879,20 +1038,22 @@ def confirm_substitute(
     participant.nachladefaehig = True
     participant.substitute_membership = substitute_membership
     _reset_attendance_confirmation(participant)
-    participant.save(update_fields=[
-        "absence_reason",
-        "status",
-        "nachladefaehig",
-        "substitute_membership",
-        "attendance_status",
-        "last_self_confirmed_at",
-        "last_attendance_event_at",
-        "updated_at",
-    ])
+    participant.save(
+        update_fields=[
+            "absence_reason",
+            "status",
+            "nachladefaehig",
+            "substitute_membership",
+            "attendance_status",
+            "last_self_confirmed_at",
+            "last_written_confirmed_at",
+            "last_attendance_event_at",
+            "updated_at",
+        ]
+    )
 
     unchanged_replacement = (
-        previous_substitute
-        and previous_substitute.pk == substitute_membership.pk
+        previous_substitute and previous_substitute.pk == substitute_membership.pk
     )
 
     if previous_substitute and previous_substitute.pk != substitute_membership.pk:
@@ -911,7 +1072,10 @@ def confirm_substitute(
         changed_by=changed_by,
     )
 
-    if _meeting_invitations_are_active(participant.meeting) and not unchanged_replacement:
+    if (
+        _meeting_invitations_are_active(participant.meeting)
+        and not unchanged_replacement
+    ):
         send_agenda_mail(participant)
 
     return substitute_membership
@@ -947,14 +1111,21 @@ def _validate_substitute_membership(
     if substitute_membership.member_type != "SUBSTITUTE":
         raise ValidationError("Ausgewählte Person ist kein Ersatzmitglied.")
 
-    already_used = MeetingParticipant.objects.filter(meeting=meeting).filter(
-        Q(membership=substitute_membership)
-        | Q(substitute_membership=substitute_membership)
-    ).exclude(status=MeetingParticipant.STATUS_CANCELLED).exists()
+    already_used = (
+        MeetingParticipant.objects.filter(meeting=meeting)
+        .filter(
+            Q(membership=substitute_membership)
+            | Q(substitute_membership=substitute_membership)
+        )
+        .exclude(status=MeetingParticipant.STATUS_CANCELLED)
+        .exists()
+    )
     if allowed_membership and allowed_membership.id == substitute_membership.id:
         already_used = False
     if already_used:
-        raise ValidationError("Ersatzmitglied ist für diese Sitzung bereits eingeplant.")
+        raise ValidationError(
+            "Ersatzmitglied ist für diese Sitzung bereits eingeplant."
+        )
 
 
 def _notify_previous_substitute_removed(
@@ -1012,18 +1183,20 @@ def _agenda_email(participant: MeetingParticipant, message: str) -> RenderedEmai
     """Render the configured agenda invitation e-mail."""
     meeting = participant.meeting
     template = EmailTemplate.get_default(EmailTemplate.MEETING_INVITATION)
-    return template.render({
-        "additional_message_block": _additional_message_block(message),
-        "agenda_text": _formatted_agenda_text(participant),
-        "committee_name": meeting.committee.name,
-        "meeting_date": f"{meeting.date:%d.%m.%Y}",
-        "meeting_location": meeting.get_full_location,
-        "meeting_start_time": f"{meeting.start_time:%H:%M}",
-        "meeting_title": meeting.title,
-        "message": message,
-        "recipient_email": _delivery_email(participant),
-        "recipient_name": _delivery_name(participant),
-    })
+    return template.render(
+        {
+            "additional_message_block": _additional_message_block(message),
+            "agenda_text": _formatted_agenda_text(participant),
+            "committee_name": meeting.committee.name,
+            "meeting_date": f"{meeting.date:%d.%m.%Y}",
+            "meeting_location": meeting.get_full_location,
+            "meeting_start_time": f"{meeting.start_time:%H:%M}",
+            "meeting_title": meeting.title,
+            "message": message,
+            "recipient_email": _delivery_email(participant),
+            "recipient_name": _delivery_name(participant),
+        }
+    )
 
 
 def _additional_message_block(message: str) -> str:
@@ -1046,7 +1219,8 @@ def _formatted_agenda_text(participant: MeetingParticipant) -> str:
 
     agenda_lines = ["Tagesordnung:"]
     items = [
-        item for item in meeting.agenda.all_items
+        item
+        for item in meeting.agenda.all_items
         if _agenda_item_visible_to_participant(item, participant)
     ]
     if not items:
@@ -1064,24 +1238,24 @@ def _formatted_agenda_text(participant: MeetingParticipant) -> str:
 
 def _meeting_invitations_are_active(meeting: Meeting) -> bool:
     """Return whether participant changes should trigger invitation emails."""
-    return bool(meeting.sent_at and meeting.status != 'DRAFT')
+    return bool(meeting.sent_at and meeting.status != "DRAFT")
 
 
 def _agenda_item_visible_to_participant(item, participant: MeetingParticipant) -> bool:
     """Return whether an agenda item may be included for this participant."""
-    if item.item_type == 'REGULAR':
+    if item.item_type == "REGULAR":
         return True
-    if item.item_type == 'ELECTION':
+    if item.item_type == "ELECTION":
         membership = _delivery_membership(participant)
         return bool(
             membership
             and _membership_has_meeting_permission(
                 membership,
                 item.agenda.meeting,
-                'election.view',
+                "election.view",
             )
         )
-    if item.item_type == 'RESOLUTION':
+    if item.item_type == "RESOLUTION":
         try:
             resolution = item.resolution_agenda_item.resolution
         except Exception:
@@ -1090,28 +1264,33 @@ def _agenda_item_visible_to_participant(item, participant: MeetingParticipant) -
         return bool(
             membership
             and membership.committee_id == resolution.committee_id
-            and _membership_has_permission(membership, 'resolution.view')
+            and _membership_has_permission(membership, "resolution.view")
         )
     return False
 
 
 def _delivery_membership(participant: MeetingParticipant) -> Membership | None:
     """Return the membership receiving the invitation."""
-    if participant.status == MeetingParticipant.STATUS_ABSENT and participant.substitute_membership_id:
+    if (
+        participant.status == MeetingParticipant.STATUS_ABSENT
+        and participant.substitute_membership_id
+    ):
         return participant.substitute_membership
     return participant.membership
 
 
-def _membership_has_meeting_permission(membership: Membership, meeting: Meeting, codename: str) -> bool:
+def _membership_has_meeting_permission(
+    membership: Membership, meeting: Meeting, codename: str
+) -> bool:
     """Return whether a membership can use a permission for a meeting."""
     if not _membership_has_permission(membership, codename):
         return False
     if membership.committee_id == meeting.committee_id:
         return True
     return bool(
-        meeting.committee.committee_type == 'MAIN'
+        meeting.committee.committee_type == "MAIN"
         and membership.committee.parent_id == meeting.committee_id
-        and membership.committee.committee_type == 'COMMITTEE'
+        and membership.committee.committee_type == "COMMITTEE"
     )
 
 
@@ -1132,14 +1311,20 @@ def _substitute_note(substitute: Membership | None) -> str:
 
 def _delivery_name(participant: MeetingParticipant) -> str:
     """Return the actual invitation recipient name."""
-    if participant.status == MeetingParticipant.STATUS_ABSENT and participant.substitute_membership_id:
+    if (
+        participant.status == MeetingParticipant.STATUS_ABSENT
+        and participant.substitute_membership_id
+    ):
         return participant.substitute_membership.user.get_full_name()
     return participant.display_name_for_display
 
 
 def _delivery_email(participant: MeetingParticipant) -> str:
     """Return the actual invitation recipient email."""
-    if participant.status == MeetingParticipant.STATUS_ABSENT and participant.substitute_membership_id:
+    if (
+        participant.status == MeetingParticipant.STATUS_ABSENT
+        and participant.substitute_membership_id
+    ):
         return _membership_email(participant.substitute_membership)
     return participant.email_for_delivery
 
