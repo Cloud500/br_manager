@@ -21,10 +21,7 @@
                         <button type="submit" class="btn btn-outline-warning btn-sm">Zwischendurch abwesend melden</button>
                     </form>
                 {% elif current_participant.attendance_status == 'LEFT' %}
-                    <form method="post" action="{% url 'meetings:meeting_self_returned' meeting.pk %}">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-success btn-sm">Ich bin wieder da</button>
-                    </form>
+                    <a href="{% url 'meetings:meeting_reconfirm' meeting.pk %}" class="btn btn-success btn-sm">Rückkehr schriftlich bestätigen</a>
                 {% else %}
                     <span class="small text-muted">Anwesenheit wird über die Sitzungsbestätigung gesetzt.</span>
                 {% endif %}

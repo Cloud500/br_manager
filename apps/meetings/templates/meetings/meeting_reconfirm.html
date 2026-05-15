@@ -12,6 +12,22 @@
                     <p class="text-muted">Bitte bestätigen Sie Ihre Teilnahme an „{{ meeting.title }}“.</p>
                     <form method="post">
                         {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="written_confirmation" class="form-label">Schriftliche Anwesenheitsbestätigung *</label>
+                        <textarea 
+                            class="form-control" 
+                            id="written_confirmation" 
+                            name="written_confirmation" 
+                            rows="3" 
+                            required
+                            maxlength="{{ written_confirmation_max_length }}"
+                            placeholder="{{ confirmation_example }}">{{ written_confirmation }}</textarea>
+                        <div class="form-text">
+                            Bitte bestätigen Sie Ihre persönliche Anwesenheit in eigenen Worten.
+                            <strong>Datenschutz:</strong> Geben Sie keine Gründe, Gesundheitsdaten oder sonstige sensible Zusatzangaben ein.
+                        </div>
+                    </div>
+                        </div>
                         <div class="mb-3">
                             <label for="id_password" class="form-label">Passwort</label>
                             <input type="password" name="password" id="id_password" class="form-control" required>
