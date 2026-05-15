@@ -19,6 +19,8 @@ from apps.participants.forms import AddParticipantForm
 from apps.participants.mixins import user_has_participant_permission
 from apps.participants.services import (
     add_participant,
+    attendance_periods_by_participant,
+    attendance_timeline_for_meeting,
     available_substitutes_for_participant,
     confirm_presence,
     confirm_substitute,
@@ -39,30 +41,53 @@ class ParticipantsTestCase(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.permission_view, _ = Permission.objects.get_or_create(
-            codename="participant.view", defaults={"name": "Teilnehmer ansehen", "category": "participant"}
+            codename="participant.view",
+            defaults={"name": "Teilnehmer ansehen", "category": "participant"},
         )
         cls.permission_edit, _ = Permission.objects.get_or_create(
-            codename="participant.edit", defaults={"name": "Teilnehmer bearbeiten", "category": "participant"}
+            codename="participant.edit",
+            defaults={"name": "Teilnehmer bearbeiten", "category": "participant"},
         )
         cls.permission_mark_absent, _ = Permission.objects.get_or_create(
-            codename="participant.mark_absent", defaults={"name": "Abwesenheit setzen", "category": "participant"}
+            codename="participant.mark_absent",
+            defaults={"name": "Abwesenheit setzen", "category": "participant"},
         )
         cls.permission_manage_substitutes, _ = Permission.objects.get_or_create(
-            codename="participant.manage_substitutes", defaults={"name": "Ersatz verwalten", "category": "participant"}
+            codename="participant.manage_substitutes",
+            defaults={"name": "Ersatz verwalten", "category": "participant"},
         )
         cls.permission_send_notifications, _ = Permission.objects.get_or_create(
-            codename="participant.send_notifications", defaults={"name": "Teilnehmer benachrichtigen", "category": "participant"}
+            codename="participant.send_notifications",
+            defaults={"name": "Teilnehmer benachrichtigen", "category": "participant"},
         )
 
-        cls.role_viewer, _ = Role.objects.get_or_create(codename="VIEWER", defaults={"name": "Viewer", "role_type": "COMMITTEE"})
-        cls.role_member, _ = Role.objects.get_or_create(codename="MEMBER", defaults={"name": "Member", "role_type": "COMMITTEE"})
-        cls.role_helper, _ = Role.objects.get_or_create(codename="HELPER", defaults={"name": "Helper", "role_type": "COMMITTEE"})
-        RolePermission.objects.create(role=cls.role_viewer, permission=cls.permission_view)
-        RolePermission.objects.create(role=cls.role_helper, permission=cls.permission_view)
-        RolePermission.objects.create(role=cls.role_helper, permission=cls.permission_edit)
-        RolePermission.objects.create(role=cls.role_helper, permission=cls.permission_mark_absent)
-        RolePermission.objects.create(role=cls.role_helper, permission=cls.permission_manage_substitutes)
-        RolePermission.objects.create(role=cls.role_helper, permission=cls.permission_send_notifications)
+        cls.role_viewer, _ = Role.objects.get_or_create(
+            codename="VIEWER", defaults={"name": "Viewer", "role_type": "COMMITTEE"}
+        )
+        cls.role_member, _ = Role.objects.get_or_create(
+            codename="MEMBER", defaults={"name": "Member", "role_type": "COMMITTEE"}
+        )
+        cls.role_helper, _ = Role.objects.get_or_create(
+            codename="HELPER", defaults={"name": "Helper", "role_type": "COMMITTEE"}
+        )
+        RolePermission.objects.create(
+            role=cls.role_viewer, permission=cls.permission_view
+        )
+        RolePermission.objects.create(
+            role=cls.role_helper, permission=cls.permission_view
+        )
+        RolePermission.objects.create(
+            role=cls.role_helper, permission=cls.permission_edit
+        )
+        RolePermission.objects.create(
+            role=cls.role_helper, permission=cls.permission_mark_absent
+        )
+        RolePermission.objects.create(
+            role=cls.role_helper, permission=cls.permission_manage_substitutes
+        )
+        RolePermission.objects.create(
+            role=cls.role_helper, permission=cls.permission_send_notifications
+        )
 
         cls.committee = Committee.objects.create(
             name="BR",
@@ -204,18 +229,22 @@ class ParticipantsTestCase(TestCase):
         self.regular_membership.election_list_name = "Liste A"
         self.regular_membership.election_list_position = 4
         self.regular_membership.election_votes = 123
-        self.regular_membership.save(update_fields=[
-            "election_list_name",
-            "election_list_position",
-            "election_votes",
-        ])
+        self.regular_membership.save(
+            update_fields=[
+                "election_list_name",
+                "election_list_position",
+                "election_votes",
+            ]
+        )
         participant = MeetingParticipant.objects.get(
             meeting=self.meeting,
             membership=self.regular_membership,
         )
         self.client.force_login(self.helper)
 
-        response = self.client.get(reverse("participants:participant_mark_absent", args=[participant.pk]))
+        response = self.client.get(
+            reverse("participants:participant_mark_absent", args=[participant.pk])
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Abwesender Teilnehmer")
@@ -224,13 +253,54 @@ class ParticipantsTestCase(TestCase):
         self.assertContains(response, "123")
 
     def test_meeting_initializes_regular_and_external_only(self):
-        committee = Committee.objects.create(name="BR-Init", committee_type="MAIN", total_seats=5)
-        regular = User.objects.create_user(email="init-regular@example.com", password="testpass123", first_name="Init", last_name="Regular", gender="M")
-        external = User.objects.create_user(email="init-external@example.com", password="testpass123", first_name="Init", last_name="External", gender="F")
-        substitute = User.objects.create_user(email="init-sub@example.com", password="testpass123", first_name="Init", last_name="Sub", gender="M")
-        regular_membership = Membership.objects.create(user=regular, committee=committee, role=self.role_viewer, member_type="REGULAR", start_date=date.today(), is_active=True)
-        external_membership = Membership.objects.create(user=external, committee=committee, role=self.role_viewer, member_type="EXTERNAL", start_date=date.today(), is_active=True)
-        Membership.objects.create(user=substitute, committee=committee, role=self.role_viewer, member_type="SUBSTITUTE", start_date=date.today(), is_active=True)
+        committee = Committee.objects.create(
+            name="BR-Init", committee_type="MAIN", total_seats=5
+        )
+        regular = User.objects.create_user(
+            email="init-regular@example.com",
+            password="testpass123",
+            first_name="Init",
+            last_name="Regular",
+            gender="M",
+        )
+        external = User.objects.create_user(
+            email="init-external@example.com",
+            password="testpass123",
+            first_name="Init",
+            last_name="External",
+            gender="F",
+        )
+        substitute = User.objects.create_user(
+            email="init-sub@example.com",
+            password="testpass123",
+            first_name="Init",
+            last_name="Sub",
+            gender="M",
+        )
+        regular_membership = Membership.objects.create(
+            user=regular,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+        )
+        external_membership = Membership.objects.create(
+            user=external,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="EXTERNAL",
+            start_date=date.today(),
+            is_active=True,
+        )
+        Membership.objects.create(
+            user=substitute,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="SUBSTITUTE",
+            start_date=date.today(),
+            is_active=True,
+        )
         meeting = Meeting.objects.create(
             committee=committee,
             title="Init",
@@ -256,88 +326,381 @@ class ParticipantsTestCase(TestCase):
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
 
-        participant = confirm_presence(self.meeting, self.regular)
+        participant = confirm_presence(
+            self.meeting,
+            self.regular,
+            written_confirmation="Ich bestätige meine Anwesenheit.",
+        )
 
         participant.refresh_from_db()
-        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT)
+        self.assertEqual(
+            participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT
+        )
         self.assertIsNotNone(participant.last_self_confirmed_at)
         event = MeetingAttendanceEvent.objects.get(participant=participant)
-        self.assertEqual(event.event_type, MeetingAttendanceEvent.EVENT_CONFIRMED_PRESENT)
+        self.assertEqual(
+            event.event_type, MeetingAttendanceEvent.EVENT_CONFIRMED_PRESENT
+        )
         self.assertEqual(event.actor, self.regular)
+        self.assertEqual(event.written_confirmation, "Ich bestätige meine Anwesenheit.")
+        self.assertIsNotNone(participant.last_written_confirmed_at)
+
+    def test_confirm_presence_requires_written_confirmation(self):
+        """Self-confirmed presence requires an explicit written statement."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+
+        with self.assertRaises(ValidationError):
+            confirm_presence(self.meeting, self.regular, written_confirmation="   ")
+
+        with self.assertRaises(ValidationError):
+            confirm_presence(
+                self.meeting,
+                self.regular,
+                written_confirmation="x" * 501,
+            )
+
+    def test_current_voting_participants_requires_technical_and_written_confirmation(
+        self,
+    ):
+        """Quorum presence requires both technical and written confirmation."""
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.regular_membership
+        )
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
+
+        self.assertNotIn(participant, current_voting_participants(self.meeting))
+
+        participant.last_self_confirmed_at = timezone.now()
+        participant.save(update_fields=["last_self_confirmed_at", "updated_at"])
+
+        self.assertIn(participant, current_voting_participants(self.meeting))
+
+    def test_attendance_timeline_keeps_written_confirmation_text_private(self):
+        """Protocol snapshots only reference written confirmations, not raw text."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+        participant = confirm_presence(
+            self.meeting,
+            self.regular,
+            written_confirmation="Ich bestätige diesen vertraulichen Text.",
+        )
+        event = participant.attendance_events.latest("occurred_at")
+
+        timeline = attendance_timeline_for_meeting(self.meeting)
+
+        self.assertEqual(timeline[0]["event_id"], str(event.pk))
+        self.assertTrue(timeline[0]["has_written_confirmation"])
+        self.assertNotIn("written_confirmation", timeline[0])
+        self.assertNotIn("Ich bestätige diesen vertraulichen Text.", str(timeline))
+
+    def test_attendance_periods_ignore_legacy_presence_without_written_confirmation(
+        self,
+    ):
+        """Completed attendance periods only start after written confirmation."""
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.regular_membership
+        )
+        started_at = timezone.now() - timedelta(minutes=20)
+        left_at = timezone.now() - timedelta(minutes=10)
+        MeetingAttendanceEvent.objects.create(
+            meeting=self.meeting,
+            participant=participant,
+            actor=self.regular,
+            event_type=MeetingAttendanceEvent.EVENT_RECONFIRMED,
+            method=MeetingAttendanceEvent.METHOD_SELF,
+            occurred_at=started_at,
+        )
+        MeetingAttendanceEvent.objects.create(
+            meeting=self.meeting,
+            participant=participant,
+            actor=self.regular,
+            event_type=MeetingAttendanceEvent.EVENT_LEFT,
+            method=MeetingAttendanceEvent.METHOD_SELF,
+            occurred_at=left_at,
+        )
+
+        periods = attendance_periods_by_participant(self.meeting)
+
+        self.assertNotIn(participant.pk, periods)
+
+        returned_at = timezone.now() - timedelta(minutes=5)
+        MeetingAttendanceEvent.objects.create(
+            meeting=self.meeting,
+            participant=participant,
+            actor=self.regular,
+            event_type=MeetingAttendanceEvent.EVENT_RETURNED,
+            method=MeetingAttendanceEvent.METHOD_SELF,
+            occurred_at=returned_at,
+            written_confirmation="Ich bestätige meine Rückkehr.",
+        )
+
+        periods = attendance_periods_by_participant(self.meeting)
+
+        self.assertIn(participant.pk, periods)
+        self.assertEqual(periods[participant.pk][0][0], returned_at)
+
+    def test_attendance_periods_accept_legacy_presence_marked_in_metadata(self):
+        """Legacy pre-migration events marked in metadata create valid periods."""
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.regular_membership
+        )
+        started_at = timezone.now() - timedelta(minutes=20)
+        left_at = timezone.now() - timedelta(minutes=10)
+        # Legacy event: no written_confirmation but marked in metadata
+        MeetingAttendanceEvent.objects.create(
+            meeting=self.meeting,
+            participant=participant,
+            actor=self.regular,
+            event_type=MeetingAttendanceEvent.EVENT_CONFIRMED_PRESENT,
+            method=MeetingAttendanceEvent.METHOD_SELF,
+            occurred_at=started_at,
+            written_confirmation="",
+            metadata={"legacy_pre_written_confirmation": True},
+        )
+        MeetingAttendanceEvent.objects.create(
+            meeting=self.meeting,
+            participant=participant,
+            actor=self.regular,
+            event_type=MeetingAttendanceEvent.EVENT_LEFT,
+            method=MeetingAttendanceEvent.METHOD_SELF,
+            occurred_at=left_at,
+        )
+
+        periods = attendance_periods_by_participant(self.meeting)
+
+        self.assertIn(participant.pk, periods)
+        self.assertEqual(len(periods[participant.pk]), 1)
+        self.assertEqual(periods[participant.pk][0][0], started_at)
+        self.assertEqual(periods[participant.pk][0][1], left_at)
 
     def test_self_absence_and_return_update_current_voting_participants(self):
         """Self-service absence removes and return restores current voting presence."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
-        participant = confirm_presence(self.meeting, self.regular)
+        participant = confirm_presence(
+            self.meeting,
+            self.regular,
+            written_confirmation="Ich bestätige meine Anwesenheit.",
+        )
 
         mark_self_left(self.meeting, self.regular)
         participant.refresh_from_db()
-        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_LEFT)
+        self.assertEqual(
+            participant.attendance_status, MeetingParticipant.ATTENDANCE_LEFT
+        )
         self.assertNotIn(participant, current_voting_participants(self.meeting))
 
-        mark_self_returned(self.meeting, self.regular)
+        with self.assertRaises(ValidationError):
+            mark_self_returned(self.meeting, self.regular, written_confirmation="")
+
+        mark_self_returned(
+            self.meeting,
+            self.regular,
+            written_confirmation="Ich bestätige meine Rückkehr in die Sitzung.",
+        )
         participant.refresh_from_db()
-        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT)
+        self.assertEqual(
+            participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT
+        )
         self.assertIn(participant, current_voting_participants(self.meeting))
+        self.assertEqual(
+            participant.attendance_events.latest("occurred_at").written_confirmation,
+            "Ich bestätige meine Rückkehr in die Sitzung.",
+        )
+
+    def test_mark_self_returned_enforces_max_length(self):
+        """Return requires written confirmation under 500 characters."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+        participant = confirm_presence(
+            self.meeting,
+            self.regular,
+            written_confirmation="Ich bestätige meine Anwesenheit.",
+        )
+        mark_self_left(self.meeting, self.regular)
+
+        with self.assertRaises(ValidationError) as cm:
+            mark_self_returned(
+                self.meeting,
+                self.regular,
+                written_confirmation="x" * 501,
+            )
+        self.assertIn("maximal 500 Zeichen", str(cm.exception))
 
     def test_substitute_assignment_resets_stale_attendance_confirmation(self):
         """Substitutes must confirm themselves before their replacement row counts as voting."""
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.regular_membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.regular_membership
+        )
         participant.status = MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["status", "attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "status",
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
 
-        confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
+        confirm_substitute(
+            participant, self.substitute_membership, changed_by=self.helper
+        )
 
         participant.refresh_from_db()
         self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
         self.assertEqual(participant.substitute_membership, self.substitute_membership)
-        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_NOT_CONFIRMED)
+        self.assertEqual(
+            participant.attendance_status, MeetingParticipant.ATTENDANCE_NOT_CONFIRMED
+        )
         self.assertIsNone(participant.last_self_confirmed_at)
+        self.assertIsNone(participant.last_written_confirmed_at)
         self.assertNotIn(participant, current_voting_participants(self.meeting))
 
     def test_substitute_removal_resets_stale_attendance_confirmation(self):
         """Removing a substitute must not transfer the substitute's presence to the original member."""
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.regular_membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.regular_membership
+        )
         participant.status = MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
         participant.save(update_fields=["status", "updated_at"])
-        confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
+        confirm_substitute(
+            participant, self.substitute_membership, changed_by=self.helper
+        )
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
 
         remove_substitute(participant, changed_by=self.helper)
 
         participant.refresh_from_db()
         self.assertIsNone(participant.substitute_membership)
         self.assertIn(participant.status, MeetingParticipant.ACTIVE_STATUSES)
-        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_NOT_CONFIRMED)
+        self.assertEqual(
+            participant.attendance_status, MeetingParticipant.ATTENDANCE_NOT_CONFIRMED
+        )
         self.assertIsNone(participant.last_self_confirmed_at)
+        self.assertIsNone(participant.last_written_confirmed_at)
         self.assertNotIn(participant, current_voting_participants(self.meeting))
 
     def test_reconfirm_presence_requires_running_meeting_and_valid_password(self):
         """Meeting-scoped re-confirmation validates credentials and running status."""
         with self.assertRaises(ValidationError):
-            reconfirm_presence(self.meeting, self.regular, password="testpass123")
+            reconfirm_presence(
+                self.meeting,
+                self.regular,
+                password="testpass123",
+                written_confirmation="Ich bestätige meine Anwesenheit.",
+            )
 
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
 
         with self.assertRaises(ValidationError):
-            reconfirm_presence(self.meeting, self.regular, password="wrong")
+            reconfirm_presence(
+                self.meeting,
+                self.regular,
+                password="wrong",
+                written_confirmation="Ich bestätige meine Anwesenheit.",
+            )
 
-        participant = reconfirm_presence(self.meeting, self.regular, password="testpass123")
+        with self.assertRaises(ValidationError):
+            reconfirm_presence(
+                self.meeting,
+                self.regular,
+                password="testpass123",
+                written_confirmation="   ",
+            )
+
+        participant = reconfirm_presence(
+            self.meeting,
+            self.regular,
+            password="testpass123",
+            written_confirmation="Ich bestätige meine Teilnahme an dieser Sitzung.",
+        )
 
         participant.refresh_from_db()
-        self.assertEqual(participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT)
+        self.assertEqual(
+            participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT
+        )
         self.assertIsNotNone(participant.last_self_confirmed_at)
         self.assertTrue(
             participant.attendance_events.filter(
                 event_type=MeetingAttendanceEvent.EVENT_RECONFIRMED,
+                written_confirmation="Ich bestätige meine Teilnahme an dieser Sitzung.",
             ).exists()
         )
+        self.assertIsNotNone(participant.last_written_confirmed_at)
+
+    def test_reconfirm_presence_uses_event_returned_for_left_participants(self):
+        """Reconfirm uses EVENT_RETURNED when participant is currently LEFT."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.regular_membership
+        )
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_LEFT
+        participant.last_self_confirmed_at = timezone.now() - timedelta(minutes=10)
+        participant.last_written_confirmed_at = timezone.now() - timedelta(minutes=10)
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
+
+        participant = reconfirm_presence(
+            self.meeting,
+            self.regular,
+            password="testpass123",
+            written_confirmation="Ich kehre zur Sitzung zurück.",
+        )
+
+        participant.refresh_from_db()
+        self.assertEqual(
+            participant.attendance_status, MeetingParticipant.ATTENDANCE_PRESENT
+        )
+        latest_event = participant.attendance_events.latest("occurred_at")
+        self.assertEqual(latest_event.event_type, MeetingAttendanceEvent.EVENT_RETURNED)
+        self.assertEqual(
+            latest_event.written_confirmation, "Ich kehre zur Sitzung zurück."
+        )
+
+    def test_reconfirm_presence_enforces_max_length(self):
+        """Reconfirm rejects written confirmation over 500 characters."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+
+        with self.assertRaises(ValidationError) as cm:
+            reconfirm_presence(
+                self.meeting,
+                self.regular,
+                password="testpass123",
+                written_confirmation="x" * 501,
+            )
+        self.assertIn("maximal 500 Zeichen", str(cm.exception))
 
     def test_add_external_membership_participant_sends_mail_after_meeting_sent(self):
         self.meeting.status = "SENT"
@@ -373,8 +736,12 @@ class ParticipantsTestCase(TestCase):
 
         participant.refresh_from_db()
         self.assertEqual(participant.membership, external_membership)
-        self.assertEqual(participant.participant_type, MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL)
-        self.assertEqual(participant.display_name_for_display, external_user.get_full_name())
+        self.assertEqual(
+            participant.participant_type, MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL
+        )
+        self.assertEqual(
+            participant.display_name_for_display, external_user.get_full_name()
+        )
         self.assertEqual(participant.email_for_delivery, external_user.email)
         self.assertFalse(participant.is_initially_invited)
         self.assertIsNotNone(participant.invite_sent_at)
@@ -413,7 +780,9 @@ class ParticipantsTestCase(TestCase):
         participant.refresh_from_db()
         other_membership.refresh_from_db()
         self.assertEqual(participant.membership, other_membership)
-        self.assertEqual(participant.display_name_for_display, other_user.get_full_name())
+        self.assertEqual(
+            participant.display_name_for_display, other_user.get_full_name()
+        )
         self.assertIn("Wirtschaftsausschuss", participant.role_for_display)
         self.assertEqual(other_membership.committee, other_committee)
         self.assertEqual(other_membership.member_type, "REGULAR")
@@ -455,12 +824,18 @@ class ParticipantsTestCase(TestCase):
         self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
 
         participant = self.meeting.participants.get(membership=self.external_membership)
-        substitute = mark_absent(participant, "dienstlich", True, changed_by=self.helper)
+        substitute = mark_absent(
+            participant, "dienstlich", True, changed_by=self.helper
+        )
         participant.refresh_from_db()
-        self.assertEqual(participant.status, MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED)
+        self.assertEqual(
+            participant.status, MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED
+        )
         self.assertEqual(substitute, self.substitute_membership)
 
-    def test_confirm_substitute_stays_on_original_participant_row_and_sends_mail_after_meeting_sent(self):
+    def test_confirm_substitute_stays_on_original_participant_row_and_sends_mail_after_meeting_sent(
+        self,
+    ):
         participant = self.meeting.participants.get(membership=self.regular_membership)
         mark_absent(participant, "krank", True, changed_by=self.helper)
         participant.refresh_from_db()
@@ -468,15 +843,27 @@ class ParticipantsTestCase(TestCase):
         self.meeting.sent_at = timezone.now()
         self.meeting.save(update_fields=["status", "sent_at", "updated_at"])
 
-        replacement1 = confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
-        replacement2 = confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
+        replacement1 = confirm_substitute(
+            participant, self.substitute_membership, changed_by=self.helper
+        )
+        replacement2 = confirm_substitute(
+            participant, self.substitute_membership, changed_by=self.helper
+        )
 
         participant.refresh_from_db()
         self.assertEqual(replacement1.pk, replacement2.pk)
         self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
         self.assertEqual(participant.substitute_membership, self.substitute_membership)
-        self.assertEqual(Membership.objects.get(pk=self.substitute_membership.pk).member_type, "SUBSTITUTE")
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting, membership=self.substitute_membership).count(), 0)
+        self.assertEqual(
+            Membership.objects.get(pk=self.substitute_membership.pk).member_type,
+            "SUBSTITUTE",
+        )
+        self.assertEqual(
+            MeetingParticipant.objects.filter(
+                meeting=self.meeting, membership=self.substitute_membership
+            ).count(),
+            0,
+        )
         self.assertEqual(len(mail.outbox), 1)
         self.assertTrue(mail.outbox[0].subject.startswith("Einladung:"))
 
@@ -495,7 +882,9 @@ class ParticipantsTestCase(TestCase):
         self.assertEqual(selected, self.substitute_membership)
         self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
         self.assertEqual(participant.substitute_membership, self.substitute_membership)
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5)
+        self.assertEqual(
+            MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5
+        )
 
         selected = mark_absent(
             participant,
@@ -507,8 +896,12 @@ class ParticipantsTestCase(TestCase):
         participant.refresh_from_db()
 
         self.assertEqual(selected, self.other_substitute_membership)
-        self.assertEqual(participant.substitute_membership, self.other_substitute_membership)
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5)
+        self.assertEqual(
+            participant.substitute_membership, self.other_substitute_membership
+        )
+        self.assertEqual(
+            MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5
+        )
         self.assertEqual(participant.absence_reason, "weiter krank")
 
     def test_mark_absent_can_remove_replacement_when_not_nachladefaehig(self):
@@ -527,7 +920,9 @@ class ParticipantsTestCase(TestCase):
         participant.refresh_from_db()
         self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
         self.assertIsNone(participant.substitute_membership)
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5)
+        self.assertEqual(
+            MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5
+        )
 
     def test_mark_absent_keeps_existing_replacement_without_extra_rows(self):
         participant = self.meeting.participants.get(membership=self.regular_membership)
@@ -547,7 +942,9 @@ class ParticipantsTestCase(TestCase):
         self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
         self.assertEqual(participant.substitute_membership, self.substitute_membership)
         self.assertEqual(participant.absence_reason, "weiter krank")
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5)
+        self.assertEqual(
+            MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5
+        )
 
     def test_remove_substitute_restores_original_with_invitation_only(self):
         participant = self.meeting.participants.get(membership=self.regular_membership)
@@ -571,11 +968,15 @@ class ParticipantsTestCase(TestCase):
         self.assertIsNone(participant.substitute_membership)
         self.assertEqual(participant.status, MeetingParticipant.STATUS_INVITED)
         self.assertEqual(participant.absence_reason, "")
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5)
+        self.assertEqual(
+            MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5
+        )
         self.assertEqual(len(mail.outbox), 2)
         self.assertTrue(mail.outbox[1].subject.startswith("Einladung:"))
         self.assertEqual(mail.outbox[1].to, [self.regular.email])
-        self.assertTrue(all(message.subject.startswith("Einladung:") for message in mail.outbox))
+        self.assertTrue(
+            all(message.subject.startswith("Einladung:") for message in mail.outbox)
+        )
 
     def test_remove_absence_restores_original_with_invitation_when_sent(self):
         participant = self.meeting.participants.get(membership=self.regular_membership)
@@ -606,7 +1007,9 @@ class ParticipantsTestCase(TestCase):
         allowed.force_login(self.helper)
 
         response = allowed.post(
-            reverse("participants:participant_remove_absence", kwargs={"pk": participant.pk}),
+            reverse(
+                "participants:participant_remove_absence", kwargs={"pk": participant.pk}
+            ),
         )
 
         self.assertEqual(response.status_code, 302)
@@ -618,7 +1021,9 @@ class ParticipantsTestCase(TestCase):
         denied = Client()
         denied.force_login(self.member)
         response = denied.post(
-            reverse("participants:participant_remove_absence", kwargs={"pk": participant.pk}),
+            reverse(
+                "participants:participant_remove_absence", kwargs={"pk": participant.pk}
+            ),
         )
 
         self.assertEqual(response.status_code, 302)
@@ -665,10 +1070,16 @@ class ParticipantsTestCase(TestCase):
 
         self.assertEqual(len(mail.outbox), 2)
         self.assertTrue(mail.outbox[1].subject.startswith("Einladung:"))
-        self.assertTrue(all(message.subject.startswith("Einladung:") for message in mail.outbox))
+        self.assertTrue(
+            all(message.subject.startswith("Einladung:") for message in mail.outbox)
+        )
         participant.refresh_from_db()
-        self.assertEqual(participant.substitute_membership, self.other_substitute_membership)
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5)
+        self.assertEqual(
+            participant.substitute_membership, self.other_substitute_membership
+        )
+        self.assertEqual(
+            MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5
+        )
 
     def test_mark_absent_edit_with_same_substitute_saves_absence_reason(self):
         participant = self.meeting.participants.get(membership=self.regular_membership)
@@ -697,18 +1108,55 @@ class ParticipantsTestCase(TestCase):
         participant = self.meeting.participants.get(membership=self.regular_membership)
 
         with self.assertRaises(ValidationError):
-            confirm_substitute(participant, self.substitute_membership, changed_by=self.helper)
+            confirm_substitute(
+                participant, self.substitute_membership, changed_by=self.helper
+            )
 
         participant.refresh_from_db()
         self.assertEqual(participant.status, MeetingParticipant.STATUS_CREATED)
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting, membership=self.substitute_membership).count(), 0)
+        self.assertEqual(
+            MeetingParticipant.objects.filter(
+                meeting=self.meeting, membership=self.substitute_membership
+            ).count(),
+            0,
+        )
 
-    def test_send_meeting_invitations_uses_membership_addresses_and_updates_timestamps(self):
-        committee = Committee.objects.create(name="BR-Mail", committee_type="MAIN", total_seats=5)
-        regular = User.objects.create_user(email="mail-regular@example.com", password="testpass123", first_name="Mail", last_name="Regular", gender="M")
-        external = User.objects.create_user(email="mail-external@example.com", password="testpass123", first_name="Mail", last_name="External", gender="F")
-        Membership.objects.create(user=regular, committee=committee, role=self.role_viewer, member_type="REGULAR", start_date=date.today(), is_active=True)
-        Membership.objects.create(user=external, committee=committee, role=self.role_viewer, member_type="EXTERNAL", start_date=date.today(), is_active=True)
+    def test_send_meeting_invitations_uses_membership_addresses_and_updates_timestamps(
+        self,
+    ):
+        committee = Committee.objects.create(
+            name="BR-Mail", committee_type="MAIN", total_seats=5
+        )
+        regular = User.objects.create_user(
+            email="mail-regular@example.com",
+            password="testpass123",
+            first_name="Mail",
+            last_name="Regular",
+            gender="M",
+        )
+        external = User.objects.create_user(
+            email="mail-external@example.com",
+            password="testpass123",
+            first_name="Mail",
+            last_name="External",
+            gender="F",
+        )
+        Membership.objects.create(
+            user=regular,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+        )
+        Membership.objects.create(
+            user=external,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="EXTERNAL",
+            start_date=date.today(),
+            is_active=True,
+        )
         meeting = Meeting.objects.create(
             committee=committee,
             title="Mail",
@@ -749,7 +1197,9 @@ class ParticipantsTestCase(TestCase):
         message = mail.outbox[0]
         self.assertEqual(message.attachments, [])
         self.assertIn("Tagesordnung:", message.body)
-        self.assertIn("1. Begrüßung und Feststellung der Beschlussfähigkeit", message.body)
+        self.assertIn(
+            "1. Begrüßung und Feststellung der Beschlussfähigkeit", message.body
+        )
         self.assertIn("   Kurze Einführung in die Sitzung.", message.body)
         self.assertIn("2. Beratung aktueller Themen", message.body)
         self.assertNotIn("TOP 1:", message.body)
@@ -794,12 +1244,20 @@ class ParticipantsTestCase(TestCase):
         send_meeting_invitations(self.meeting, message="Bitte Unterlagen mitbringen")
 
         message = mail.outbox[0]
-        self.assertIn(f"Ort: {self.meeting.get_full_location}\n\nTagesordnung:", message.body)
-        self.assertIn("1. Beschlussfassung\n\nXYZ\n\nZusätzliche Nachricht:", message.body)
-        self.assertNotIn(f"Ort: {self.meeting.get_full_location}\n\n\nTagesordnung:", message.body)
+        self.assertIn(
+            f"Ort: {self.meeting.get_full_location}\n\nTagesordnung:", message.body
+        )
+        self.assertIn(
+            "1. Beschlussfassung\n\nXYZ\n\nZusätzliche Nachricht:", message.body
+        )
+        self.assertNotIn(
+            f"Ort: {self.meeting.get_full_location}\n\n\nTagesordnung:", message.body
+        )
         self.assertNotIn("XYZ\n\n\nZusätzliche Nachricht:", message.body)
 
-    def test_draft_meeting_with_preserved_sent_timestamp_does_not_auto_send_invitation(self):
+    def test_draft_meeting_with_preserved_sent_timestamp_does_not_auto_send_invitation(
+        self,
+    ):
         self.meeting.status = "DRAFT"
         self.meeting.sent_at = timezone.now()
         self.meeting.save(update_fields=["status", "sent_at", "updated_at"])
@@ -823,17 +1281,26 @@ class ParticipantsTestCase(TestCase):
 
         self.assertEqual(len(mail.outbox), 0)
 
-    def test_absent_and_substitute_proposed_participants_do_not_receive_invitation(self):
+    def test_absent_and_substitute_proposed_participants_do_not_receive_invitation(
+        self,
+    ):
         regular = self.meeting.participants.get(membership=self.regular_membership)
         external = self.meeting.participants.get(membership=self.external_membership)
         mark_absent(regular, "krank", False, changed_by=self.helper)
         mark_absent(external, "dienstlich", True, changed_by=self.helper)
 
-        sent_count = send_meeting_invitations(self.meeting, message="Bitte pünktlich sein")
+        sent_count = send_meeting_invitations(
+            self.meeting, message="Bitte pünktlich sein"
+        )
         regular.refresh_from_db()
         external.refresh_from_db()
 
-        self.assertEqual(sent_count, self.meeting.participants.filter(status=MeetingParticipant.STATUS_INVITED).count())
+        self.assertEqual(
+            sent_count,
+            self.meeting.participants.filter(
+                status=MeetingParticipant.STATUS_INVITED
+            ).count(),
+        )
         self.assertEqual(regular.status, MeetingParticipant.STATUS_ABSENT)
         self.assertEqual(external.status, MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED)
         self.assertIsNone(regular.invite_sent_at)
@@ -842,16 +1309,82 @@ class ParticipantsTestCase(TestCase):
     def test_substitute_suggestion_uses_membership_assignments(self):
         self.assertEqual(suggest_substitute(self.meeting), self.substitute_membership)
 
-    def test_substitute_suggestion_prefers_same_election_list_like_member_replacement(self):
-        committee = Committee.objects.create(name="BR-Liste", committee_type="MAIN", total_seats=5)
-        absent_user = User.objects.create_user(email="liste-abwesend@example.com", password="testpass123", first_name="Liste", last_name="Abwesend", gender="M")
-        other_regular_user = User.objects.create_user(email="liste-regular@example.com", password="testpass123", first_name="Liste", last_name="Regular", gender="M")
-        same_list_sub_user = User.objects.create_user(email="liste-same-sub@example.com", password="testpass123", first_name="Same", last_name="List", gender="M")
-        other_list_sub_user = User.objects.create_user(email="liste-other-sub@example.com", password="testpass123", first_name="Other", last_name="List", gender="F")
-        absent_membership = Membership.objects.create(user=absent_user, committee=committee, role=self.role_viewer, member_type="REGULAR", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=2)
-        Membership.objects.create(user=other_regular_user, committee=committee, role=self.role_viewer, member_type="REGULAR", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=3)
-        same_list_substitute = Membership.objects.create(user=same_list_sub_user, committee=committee, role=self.role_viewer, member_type="SUBSTITUTE", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=4, election_votes=10)
-        other_list_substitute = Membership.objects.create(user=other_list_sub_user, committee=committee, role=self.role_viewer, member_type="SUBSTITUTE", start_date=date.today(), is_active=True, election_list_name="Liste B", election_list_position=1, election_votes=999)
+    def test_substitute_suggestion_prefers_same_election_list_like_member_replacement(
+        self,
+    ):
+        committee = Committee.objects.create(
+            name="BR-Liste", committee_type="MAIN", total_seats=5
+        )
+        absent_user = User.objects.create_user(
+            email="liste-abwesend@example.com",
+            password="testpass123",
+            first_name="Liste",
+            last_name="Abwesend",
+            gender="M",
+        )
+        other_regular_user = User.objects.create_user(
+            email="liste-regular@example.com",
+            password="testpass123",
+            first_name="Liste",
+            last_name="Regular",
+            gender="M",
+        )
+        same_list_sub_user = User.objects.create_user(
+            email="liste-same-sub@example.com",
+            password="testpass123",
+            first_name="Same",
+            last_name="List",
+            gender="M",
+        )
+        other_list_sub_user = User.objects.create_user(
+            email="liste-other-sub@example.com",
+            password="testpass123",
+            first_name="Other",
+            last_name="List",
+            gender="F",
+        )
+        absent_membership = Membership.objects.create(
+            user=absent_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=2,
+        )
+        Membership.objects.create(
+            user=other_regular_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=3,
+        )
+        same_list_substitute = Membership.objects.create(
+            user=same_list_sub_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="SUBSTITUTE",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=4,
+            election_votes=10,
+        )
+        other_list_substitute = Membership.objects.create(
+            user=other_list_sub_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="SUBSTITUTE",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste B",
+            election_list_position=1,
+            election_votes=999,
+        )
         meeting = Meeting.objects.create(
             committee=committee,
             title="Liste",
@@ -865,7 +1398,9 @@ class ParticipantsTestCase(TestCase):
         participant = meeting.participants.get(membership=absent_membership)
 
         self.assertEqual(suggest_substitute(meeting, participant), same_list_substitute)
-        self.assertNotEqual(suggest_substitute(meeting, participant), other_list_substitute)
+        self.assertNotEqual(
+            suggest_substitute(meeting, participant), other_list_substitute
+        )
 
     def test_substitute_suggestion_prioritizes_minority_gender_when_quota_not_met(self):
         committee = Committee.objects.create(
@@ -875,14 +1410,76 @@ class ParticipantsTestCase(TestCase):
             minority_gender="F",
             minority_min_count=2,
         )
-        absent_user = User.objects.create_user(email="minority-absent@example.com", password="testpass123", first_name="Minority", last_name="Absent", gender="F")
-        regular_user = User.objects.create_user(email="minority-regular@example.com", password="testpass123", first_name="Minority", last_name="Regular", gender="M")
-        male_sub_user = User.objects.create_user(email="minority-male-sub@example.com", password="testpass123", first_name="Male", last_name="Sub", gender="M")
-        female_sub_user = User.objects.create_user(email="minority-female-sub@example.com", password="testpass123", first_name="Female", last_name="Sub", gender="F")
-        absent_membership = Membership.objects.create(user=absent_user, committee=committee, role=self.role_viewer, member_type="REGULAR", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=1)
-        Membership.objects.create(user=regular_user, committee=committee, role=self.role_viewer, member_type="REGULAR", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=2)
-        male_substitute = Membership.objects.create(user=male_sub_user, committee=committee, role=self.role_viewer, member_type="SUBSTITUTE", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=3, election_votes=100)
-        female_substitute = Membership.objects.create(user=female_sub_user, committee=committee, role=self.role_viewer, member_type="SUBSTITUTE", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=4, election_votes=1)
+        absent_user = User.objects.create_user(
+            email="minority-absent@example.com",
+            password="testpass123",
+            first_name="Minority",
+            last_name="Absent",
+            gender="F",
+        )
+        regular_user = User.objects.create_user(
+            email="minority-regular@example.com",
+            password="testpass123",
+            first_name="Minority",
+            last_name="Regular",
+            gender="M",
+        )
+        male_sub_user = User.objects.create_user(
+            email="minority-male-sub@example.com",
+            password="testpass123",
+            first_name="Male",
+            last_name="Sub",
+            gender="M",
+        )
+        female_sub_user = User.objects.create_user(
+            email="minority-female-sub@example.com",
+            password="testpass123",
+            first_name="Female",
+            last_name="Sub",
+            gender="F",
+        )
+        absent_membership = Membership.objects.create(
+            user=absent_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=1,
+        )
+        Membership.objects.create(
+            user=regular_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=2,
+        )
+        male_substitute = Membership.objects.create(
+            user=male_sub_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="SUBSTITUTE",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=3,
+            election_votes=100,
+        )
+        female_substitute = Membership.objects.create(
+            user=female_sub_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="SUBSTITUTE",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=4,
+            election_votes=1,
+        )
         meeting = Meeting.objects.create(
             committee=committee,
             title="Minderheit",
@@ -898,16 +1495,80 @@ class ParticipantsTestCase(TestCase):
         self.assertEqual(suggest_substitute(meeting, participant), female_substitute)
         self.assertNotEqual(suggest_substitute(meeting, participant), male_substitute)
 
-    def test_available_substitutes_uses_fair_rotation_order_after_current_list_positions(self):
-        committee = Committee.objects.create(name="BR-Rotation", committee_type="MAIN", total_seats=5)
-        absent_user = User.objects.create_user(email="rotation-absent@example.com", password="testpass123", first_name="Rotation", last_name="Absent", gender="M")
-        regular_a_user = User.objects.create_user(email="rotation-a@example.com", password="testpass123", first_name="Rotation", last_name="A", gender="M")
-        sub_a_user = User.objects.create_user(email="rotation-sub-a@example.com", password="testpass123", first_name="Sub", last_name="A", gender="M")
-        sub_b_user = User.objects.create_user(email="rotation-sub-b@example.com", password="testpass123", first_name="Sub", last_name="B", gender="F")
-        absent_membership = Membership.objects.create(user=absent_user, committee=committee, role=self.role_viewer, member_type="REGULAR", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=1)
-        Membership.objects.create(user=regular_a_user, committee=committee, role=self.role_viewer, member_type="REGULAR", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=2)
-        sub_a = Membership.objects.create(user=sub_a_user, committee=committee, role=self.role_viewer, member_type="SUBSTITUTE", start_date=date.today(), is_active=True, election_list_name="Liste A", election_list_position=3)
-        sub_b = Membership.objects.create(user=sub_b_user, committee=committee, role=self.role_viewer, member_type="SUBSTITUTE", start_date=date.today(), is_active=True, election_list_name="Liste B", election_list_position=1)
+    def test_available_substitutes_uses_fair_rotation_order_after_current_list_positions(
+        self,
+    ):
+        committee = Committee.objects.create(
+            name="BR-Rotation", committee_type="MAIN", total_seats=5
+        )
+        absent_user = User.objects.create_user(
+            email="rotation-absent@example.com",
+            password="testpass123",
+            first_name="Rotation",
+            last_name="Absent",
+            gender="M",
+        )
+        regular_a_user = User.objects.create_user(
+            email="rotation-a@example.com",
+            password="testpass123",
+            first_name="Rotation",
+            last_name="A",
+            gender="M",
+        )
+        sub_a_user = User.objects.create_user(
+            email="rotation-sub-a@example.com",
+            password="testpass123",
+            first_name="Sub",
+            last_name="A",
+            gender="M",
+        )
+        sub_b_user = User.objects.create_user(
+            email="rotation-sub-b@example.com",
+            password="testpass123",
+            first_name="Sub",
+            last_name="B",
+            gender="F",
+        )
+        absent_membership = Membership.objects.create(
+            user=absent_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=1,
+        )
+        Membership.objects.create(
+            user=regular_a_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="REGULAR",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=2,
+        )
+        sub_a = Membership.objects.create(
+            user=sub_a_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="SUBSTITUTE",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste A",
+            election_list_position=3,
+        )
+        sub_b = Membership.objects.create(
+            user=sub_b_user,
+            committee=committee,
+            role=self.role_viewer,
+            member_type="SUBSTITUTE",
+            start_date=date.today(),
+            is_active=True,
+            election_list_name="Liste B",
+            election_list_position=1,
+        )
         meeting = Meeting.objects.create(
             committee=committee,
             title="Rotation",
@@ -926,8 +1587,16 @@ class ParticipantsTestCase(TestCase):
         )
 
     def test_user_has_participant_permission(self):
-        self.assertTrue(user_has_participant_permission(self.viewer, self.meeting, "participant.view"))
-        self.assertFalse(user_has_participant_permission(self.member, self.meeting, "participant.edit"))
+        self.assertTrue(
+            user_has_participant_permission(
+                self.viewer, self.meeting, "participant.view"
+            )
+        )
+        self.assertFalse(
+            user_has_participant_permission(
+                self.member, self.meeting, "participant.edit"
+            )
+        )
 
     def test_meeting_detail_sorts_participants_by_role_order_then_name(self):
         meeting_view_permission, _ = Permission.objects.get_or_create(
@@ -947,7 +1616,9 @@ class ParticipantsTestCase(TestCase):
         client = Client()
         client.force_login(self.helper)
 
-        response = client.get(reverse("meetings:meeting_detail", kwargs={"pk": self.meeting.pk}))
+        response = client.get(
+            reverse("meetings:meeting_detail", kwargs={"pk": self.meeting.pk})
+        )
 
         self.assertEqual(response.status_code, 200)
         participants = list(response.context["participants"])
@@ -966,7 +1637,12 @@ class ParticipantsTestCase(TestCase):
         participant = self.meeting.participants.get(membership=self.regular_membership)
         allowed = Client()
         allowed.force_login(self.helper)
-        response = allowed.post(reverse("participants:participant_mark_absent", kwargs={"pk": participant.pk}), data={"absence_reason": "krank", "nachladefaehig": ""})
+        response = allowed.post(
+            reverse(
+                "participants:participant_mark_absent", kwargs={"pk": participant.pk}
+            ),
+            data={"absence_reason": "krank", "nachladefaehig": ""},
+        )
         self.assertEqual(response.status_code, 302)
         participant.refresh_from_db()
         participant.refresh_from_db()
@@ -974,9 +1650,17 @@ class ParticipantsTestCase(TestCase):
 
         denied = Client()
         denied.force_login(self.member)
-        response = denied.post(reverse("participants:participant_mark_absent", kwargs={"pk": participant.pk}), data={"absence_reason": "krank", "nachladefaehig": ""})
+        response = denied.post(
+            reverse(
+                "participants:participant_mark_absent", kwargs={"pk": participant.pk}
+            ),
+            data={"absence_reason": "krank", "nachladefaehig": ""},
+        )
         self.assertEqual(response.status_code, 302)
-        self.assertIn(reverse("meetings:meeting_detail", kwargs={"pk": self.meeting.pk}), response.url)
+        self.assertIn(
+            reverse("meetings:meeting_detail", kwargs={"pk": self.meeting.pk}),
+            response.url,
+        )
 
     def test_mark_absent_view_combines_absence_and_substitute(self):
         participant = self.meeting.participants.get(membership=self.regular_membership)
@@ -984,7 +1668,9 @@ class ParticipantsTestCase(TestCase):
         allowed.force_login(self.helper)
 
         response = allowed.post(
-            reverse("participants:participant_mark_absent", kwargs={"pk": participant.pk}),
+            reverse(
+                "participants:participant_mark_absent", kwargs={"pk": participant.pk}
+            ),
             data={
                 "absence_reason": "krank",
                 "nachladefaehig": "on",
@@ -996,7 +1682,9 @@ class ParticipantsTestCase(TestCase):
         participant.refresh_from_db()
         self.assertEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
         self.assertEqual(participant.substitute_membership, self.substitute_membership)
-        self.assertEqual(MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5)
+        self.assertEqual(
+            MeetingParticipant.objects.filter(meeting=self.meeting).count(), 5
+        )
 
     def test_mark_absent_view_does_not_allow_substitute_without_manage_permission(self):
         RolePermission.objects.get_or_create(
@@ -1008,7 +1696,9 @@ class ParticipantsTestCase(TestCase):
         client.force_login(self.member)
 
         response = client.post(
-            reverse("participants:participant_mark_absent", kwargs={"pk": participant.pk}),
+            reverse(
+                "participants:participant_mark_absent", kwargs={"pk": participant.pk}
+            ),
             data={
                 "absence_reason": "krank",
                 "nachladefaehig": "on",
@@ -1021,7 +1711,9 @@ class ParticipantsTestCase(TestCase):
         self.assertNotEqual(participant.status, MeetingParticipant.STATUS_ABSENT)
         self.assertIsNone(participant.substitute_membership)
 
-    def test_mark_absent_view_does_not_allow_clearing_substitute_without_manage_permission(self):
+    def test_mark_absent_view_does_not_allow_clearing_substitute_without_manage_permission(
+        self,
+    ):
         RolePermission.objects.get_or_create(
             role=self.role_member,
             permission=self.permission_mark_absent,
@@ -1039,7 +1731,9 @@ class ParticipantsTestCase(TestCase):
         client.force_login(self.member)
 
         response = client.post(
-            reverse("participants:participant_mark_absent", kwargs={"pk": participant.pk}),
+            reverse(
+                "participants:participant_mark_absent", kwargs={"pk": participant.pk}
+            ),
             data={
                 "absence_reason": "weiter krank",
                 "nachladefaehig": "on",
@@ -1051,7 +1745,9 @@ class ParticipantsTestCase(TestCase):
         participant.refresh_from_db()
         self.assertEqual(participant.substitute_membership, self.substitute_membership)
 
-    def test_add_participant_form_limits_choices_to_related_committees_and_unused_members(self):
+    def test_add_participant_form_limits_choices_to_related_committees_and_unused_members(
+        self,
+    ):
         related_committee = Committee.objects.create(
             name="Wirtschaftsausschuss",
             committee_type="SUBCOMMITTEE",
@@ -1103,7 +1799,9 @@ class ParticipantsTestCase(TestCase):
         )
 
         form = AddParticipantForm(meeting=self.meeting)
-        candidate_ids = set(form.fields["membership"].queryset.values_list("id", flat=True))
+        candidate_ids = set(
+            form.fields["membership"].queryset.values_list("id", flat=True)
+        )
 
         self.assertIn(related_membership.id, candidate_ids)
         self.assertIn(self.substitute_membership.id, candidate_ids)
@@ -1159,7 +1857,9 @@ class ParticipantsTestCase(TestCase):
         )
 
         form = AddParticipantForm(meeting=self.meeting)
-        candidate_ids = set(form.fields["membership"].queryset.values_list("id", flat=True))
+        candidate_ids = set(
+            form.fields["membership"].queryset.values_list("id", flat=True)
+        )
 
         self.assertNotIn(duplicate_substitute_user_membership.id, candidate_ids)
 
@@ -1188,7 +1888,9 @@ class ParticipantsTestCase(TestCase):
         allowed = Client()
         allowed.force_login(self.helper)
         response = allowed.post(
-            reverse("participants:participant_add", kwargs={"meeting_pk": self.meeting.pk}),
+            reverse(
+                "participants:participant_add", kwargs={"meeting_pk": self.meeting.pk}
+            ),
             data={"membership": guest_membership.pk},
         )
         self.assertEqual(response.status_code, 302)
@@ -1203,7 +1905,9 @@ class ParticipantsTestCase(TestCase):
         denied = Client()
         denied.force_login(self.member)
         response = denied.post(
-            reverse("participants:participant_add", kwargs={"meeting_pk": self.meeting.pk}),
+            reverse(
+                "participants:participant_add", kwargs={"meeting_pk": self.meeting.pk}
+            ),
             data={"membership": denied_membership.pk},
         )
         self.assertEqual(response.status_code, 302)
