@@ -9,9 +9,16 @@ from django.views.generic import DetailView, FormView, ListView
 
 from apps.agendas.models import AgendaItem
 from apps.meetings.models import Meeting
-from apps.meetings.views import MeetingLiveRuntimeMixin, _render_live_agenda_response, _user_can_edit_protocol_notes
+from apps.meetings.views import (
+    MeetingLiveRuntimeMixin,
+    _render_live_agenda_response,
+    _user_can_edit_protocol_notes,
+)
 from apps.participants.models import MeetingParticipant
-from apps.participants.services import attendance_periods_by_participant, loaded_participant_for_user
+from apps.participants.services import (
+    attendance_periods_by_participant,
+    loaded_participant_for_user,
+)
 from apps.protocols.forms import ProtocolAgendaItemNoteForm, ProtocolBodyForm
 from apps.protocols.models import Protocol, ProtocolEntry
 from apps.protocols.services import ProtocolDraftService
@@ -27,12 +34,17 @@ class ProtocolListView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         """Return protocols for committees the user can access."""
-        queryset = Protocol.objects.select_related("meeting", "meeting__committee", "updated_by")
+        queryset = Protocol.objects.select_related(
+            "meeting", "meeting__committee", "updated_by"
+        )
         user = self.request.user
         if user.is_staff or user.is_superuser:
             return queryset
         return queryset.filter(
-            Q(meeting__committee__memberships__user=user, meeting__committee__memberships__is_active=True)
+            Q(
+                meeting__committee__memberships__user=user,
+                meeting__committee__memberships__is_active=True,
+            )
             | Q(meeting__clerk=user)
             | Q(meeting__chair=user)
         ).distinct()
@@ -54,9 +66,13 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
             or user.is_superuser
             or protocol.meeting.clerk_id == user.id
             or protocol.meeting.chair_id == user.id
-            or protocol.meeting.committee.memberships.filter(user=user, is_active=True).exists()
+            or protocol.meeting.committee.memberships.filter(
+                user=user, is_active=True
+            ).exists()
         ):
-            messages.error(request, "Sie haben keine Berechtigung zur Anzeige dieses Protokolls.")
+            messages.error(
+                request, "Sie haben keine Berechtigung zur Anzeige dieses Protokolls."
+            )
             return redirect("protocols:protocol_list")
         return super().dispatch(request, *args, **kwargs)
 
@@ -67,21 +83,30 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
         agenda_items = self._agenda_items_for_protocol(protocol)
         participant_context = self._participant_context(protocol.meeting)
         context["body_form"] = ProtocolBodyForm(initial={"body": protocol.body})
-        context["can_edit_protocol"] = _user_can_edit_protocol_notes(self.request.user, protocol.meeting) and protocol.is_editable
+        context["can_edit_protocol"] = (
+            _user_can_edit_protocol_notes(self.request.user, protocol.meeting)
+            and protocol.is_editable
+        )
         context["agenda_items"] = agenda_items
         context["discussion_items"] = agenda_items
         context["meeting_start_display"] = self._meeting_start_display(protocol.meeting)
         context["meeting_end_display"] = self._meeting_end_display(protocol.meeting)
         context.update(participant_context)
-        context["election_entries"] = self._result_entries(protocol, ProtocolEntry.ENTRY_ELECTION)
-        context["resolution_entries"] = self._result_entries(protocol, ProtocolEntry.ENTRY_RESOLUTION)
+        context["election_entries"] = self._result_entries(
+            protocol, ProtocolEntry.ENTRY_ELECTION
+        )
+        context["resolution_entries"] = self._result_entries(
+            protocol, ProtocolEntry.ENTRY_RESOLUTION
+        )
         return context
 
     def post(self, request, *args, **kwargs):
         """Update editable protocol text or one TOP note."""
         self.object = self.get_object()
         if not _user_can_edit_protocol_notes(request.user, self.object.meeting):
-            messages.error(request, "Nur die Protokollführung kann das Protokoll bearbeiten.")
+            messages.error(
+                request, "Nur die Protokollführung kann das Protokoll bearbeiten."
+            )
             return redirect("protocols:protocol_detail", pk=self.object.pk)
         if self._live_reconfirmation_required(request.user, self.object.meeting):
             return redirect("meetings:meeting_reconfirm", pk=self.object.meeting.pk)
@@ -92,7 +117,9 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
             messages.error(request, "Bitte prüfen Sie den Protokolltext.")
             return self.get(request, *args, **kwargs)
         try:
-            ProtocolDraftService.update_body(self.object, form.cleaned_data["body"], actor=request.user)
+            ProtocolDraftService.update_body(
+                self.object, form.cleaned_data["body"], actor=request.user
+            )
         except ValidationError as error:
             messages.error(request, error.messages[0])
             return redirect("protocols:protocol_detail", pk=self.object.pk)
@@ -104,7 +131,11 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
         if meeting.status != "IN_PROGRESS" or user.is_staff or user.is_superuser:
             return False
         participant = loaded_participant_for_user(meeting, user)
-        return not bool(participant and participant.last_self_confirmed_at)
+        return not bool(
+            participant
+            and participant.last_self_confirmed_at
+            and participant.last_written_confirmed_at
+        )
 
     def _post_agenda_note(self, request):
         """Persist one TOP note from the structured protocol view."""
@@ -136,10 +167,11 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
             str(note.agenda_item_id): note.body
             for note in protocol.item_notes.select_related("agenda_item")
         }
-        agenda_item_map = {
-            str(item.pk): item
-            for item in protocol.meeting.agenda.items.all()
-        } if protocol.meeting.has_agenda else {}
+        agenda_item_map = (
+            {str(item.pk): item for item in protocol.meeting.agenda.items.all()}
+            if protocol.meeting.has_agenda
+            else {}
+        )
         snapshot = protocol.agenda_snapshot or []
         if not snapshot and protocol.meeting.has_agenda:
             snapshot = [
@@ -158,7 +190,9 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
                 "agenda_item": agenda_item_map.get(item_data.get("agenda_item_id", "")),
                 "item_number": item_data.get("item_number", ""),
                 "indent_class": self._indent_class(item_data.get("item_number", "")),
-                "number_display": self._number_display(item_data.get("item_number", "")),
+                "number_display": self._number_display(
+                    item_data.get("item_number", "")
+                ),
                 "title": item_data.get("title", ""),
                 "description": item_data.get("description", ""),
                 "item_type": item_data.get("item_type", ""),
@@ -194,7 +228,9 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
     def _meeting_end_display(self, meeting: Meeting) -> str:
         """Return the most precise available meeting end display."""
         if meeting.actual_end_time:
-            actual_end_date = meeting.actual_end_date or meeting.actual_start_date or meeting.date
+            actual_end_date = (
+                meeting.actual_end_date or meeting.actual_start_date or meeting.date
+            )
             return f"{actual_end_date:%d.%m.%Y} {meeting.actual_end_time:%H:%M} Uhr"
         if meeting.end_time:
             return f"{meeting.date:%d.%m.%Y} {meeting.end_time:%H:%M} Uhr"
@@ -202,14 +238,16 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
 
     def _participant_context(self, meeting: Meeting) -> dict:
         """Group participants for a readable protocol attendance section."""
-        participants = list(meeting.participants.select_related(
-            "membership",
-            "membership__user",
-            "membership__role",
-            "substitute_membership",
-            "substitute_membership__user",
-            "substitute_membership__role",
-        ).order_by("membership__user__last_name", "membership__user__first_name"))
+        participants = list(
+            meeting.participants.select_related(
+                "membership",
+                "membership__user",
+                "membership__role",
+                "substitute_membership",
+                "substitute_membership__user",
+                "substitute_membership__role",
+            ).order_by("membership__user__last_name", "membership__user__first_name")
+        )
         periods_by_participant = attendance_periods_by_participant(meeting)
         present = []
         excused_absent = []
@@ -219,7 +257,10 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
         for participant in participants:
             periods = periods_by_participant.get(participant.pk, [])
             participant.protocol_periods = periods
-            if participant.participant_type == MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL:
+            if (
+                participant.participant_type
+                == MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL
+            ):
                 guests.append(participant)
             if participant.substitute_membership_id:
                 substitutes.append(participant)
@@ -230,7 +271,10 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
                 MeetingParticipant.STATUS_SUBSTITUTE_PROPOSED,
             ]:
                 excused_absent.append(participant)
-            elif participant.participant_type != MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL:
+            elif (
+                participant.participant_type
+                != MeetingParticipant.PARTICIPANT_TYPE_EXTERNAL
+            ):
                 unexcused_absent.append(participant)
         return {
             "present_participants": present,
@@ -246,9 +290,13 @@ class ProtocolDetailView(LoginRequiredMixin, DetailView):
             note.agenda_item_id: note.body
             for note in protocol.item_notes.select_related("agenda_item")
         }
-        entries = protocol.entries.select_related("agenda_item").filter(
-            entry_type=entry_type,
-        ).order_by("agenda_item__sort_order", "created_at", "id")
+        entries = (
+            protocol.entries.select_related("agenda_item")
+            .filter(
+                entry_type=entry_type,
+            )
+            .order_by("agenda_item__sort_order", "created_at", "id")
+        )
         return [
             {
                 "entry": entry,
@@ -269,7 +317,9 @@ class ProtocolAgendaItemNoteUpdateView(MeetingLiveRuntimeMixin, FormView):
         """Require the meeting clerk or privileged user."""
         meeting = self.get_meeting()
         if not _user_can_edit_protocol_notes(request.user, meeting):
-            messages.error(request, "Nur die Protokollführung kann TOP-Notizen bearbeiten.")
+            messages.error(
+                request, "Nur die Protokollführung kann TOP-Notizen bearbeiten."
+            )
             return redirect("meetings:meeting_live", pk=meeting.pk)
         return super().dispatch(request, *args, **kwargs)
 
@@ -291,7 +341,9 @@ class ProtocolAgendaItemNoteUpdateView(MeetingLiveRuntimeMixin, FormView):
 
     def get_initial(self):
         """Pre-fill existing note."""
-        protocol = ProtocolDraftService.get_or_create_for_meeting(self.get_meeting(), self.request.user)
+        protocol = ProtocolDraftService.get_or_create_for_meeting(
+            self.get_meeting(), self.request.user
+        )
         note = protocol.item_notes.filter(agenda_item=self.get_agenda_item()).first()
         return {"body": note.body if note else ""}
 
@@ -305,7 +357,9 @@ class ProtocolAgendaItemNoteUpdateView(MeetingLiveRuntimeMixin, FormView):
     def form_valid(self, form):
         """Persist note through protocol service."""
         meeting = self.get_meeting()
-        protocol = ProtocolDraftService.get_or_create_for_meeting(meeting, self.request.user)
+        protocol = ProtocolDraftService.get_or_create_for_meeting(
+            meeting, self.request.user
+        )
         try:
             ProtocolDraftService.update_item_note(
                 protocol,
@@ -322,5 +376,6 @@ class ProtocolAgendaItemNoteUpdateView(MeetingLiveRuntimeMixin, FormView):
         if self.request.headers.get("HX-Request"):
             return _render_live_agenda_response(self.request, meeting)
         return redirect("meetings:meeting_live", pk=meeting.pk)
+
 
 # Create your views here.
