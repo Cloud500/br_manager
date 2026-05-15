@@ -71,7 +71,7 @@
                         <tr>
                             <th>Beschlussnummer</th>
                             <th>Titel</th>
-                            <th>Beschlussvorschlag</th>
+                            <th>Beschreibung</th>
                             <th>Gremium</th>
                             <th>Status</th>
                             <th>Erstellt am</th>
@@ -92,7 +92,7 @@
                                 <strong>{{ resolution.title }}</strong>
                             </td>
                             <td>
-                                {{ resolution.proposal|truncatewords:15 }}
+                                {{ resolution.description|truncatewords:15 }}
                             </td>
                             <td>
                                 <span class="badge bg-secondary">{{ resolution.committee.name }}</span>

@@ -69,8 +69,8 @@
 
                     <h6>Titel und Beschreibung</h6>
                     <p class="small">
-                        Sie können einen eigenen Titel und eine Beschreibung für den Tagesordnungspunkt vergeben.
-                        Wenn Sie keinen Titel angeben, wird automatisch der Titel des Beschlusses übernommen.
+                        Titel und Beschreibung werden als Snapshot aus dem ausgewählten Beschluss übernommen.
+                        Spätere Änderungen am Beschluss verändern bereits angelegte Tagesordnungspunkte nicht automatisch.
                     </p>
 
                     <h6>Hierarchische Struktur</h6>
@@ -89,35 +89,4 @@
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-{{ block.super }}
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const resolutionTitles = {
-            {% for resolution in form.fields.resolution.queryset %}
-                '{{ resolution.pk }}': '{{ resolution.title|escapejs }}'{% if not forloop.last %},{% endif %}
-            {% endfor %}
-        };
-        const resolutionSelect = document.getElementById('id_resolution');
-        const titleInput = document.getElementById('id_title');
-        let lastAutoFilledTitle = '';
-
-        if (!resolutionSelect || !titleInput) {
-            return;
-        }
-
-        resolutionSelect.addEventListener('change', function () {
-            const selectedTitle = resolutionTitles[resolutionSelect.value] || '';
-            if (!selectedTitle) {
-                return;
-            }
-            if (!titleInput.value || titleInput.value === lastAutoFilledTitle) {
-                titleInput.value = selectedTitle;
-                lastAutoFilledTitle = selectedTitle;
-            }
-        });
-    });
-</script>
 {% endblock %}

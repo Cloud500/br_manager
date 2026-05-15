@@ -39,17 +39,19 @@
                         <p class="lead mb-0">{{ resolution.title }}</p>
                     </div>
 
-                    <!-- Proposal -->
+                    <!-- Description -->
                     <div class="mb-4">
-                        <h6 class="text-muted">Beschlussvorschlag</h6>
-                        <p>{{ resolution.proposal|linebreaks }}</p>
+                        <h6 class="text-muted">Beschreibung</h6>
+                        <p>{{ resolution.description|linebreaks }}</p>
                     </div>
 
-                    <!-- Justification -->
-                    {% if resolution.justification %}
+                    <!-- Decision Text (only for APPROVED/REJECTED) -->
+                    {% if resolution.show_voting_fields and resolution.decision_text %}
                     <div class="mb-4">
-                        <h6 class="text-muted">Begründung</h6>
-                        <p>{{ resolution.justification|linebreaks }}</p>
+                        <h6 class="text-muted">Beschlussfassung</h6>
+                        <div class="border rounded p-3 bg-light">
+                            {{ resolution.decision_text|safe }}
+                        </div>
                     </div>
                     {% endif %}
 
