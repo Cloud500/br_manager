@@ -113,7 +113,9 @@ class MeetingCreateViewPermissionTest(TestCase):
             transform=lambda committee: committee,
         )
 
-    def test_user_without_create_permission_cannot_open_create_form_without_committee(self):
+    def test_user_without_create_permission_cannot_open_create_form_without_committee(
+        self,
+    ):
         """Users without create permission are still denied when no committee is selected."""
         self.client.force_login(self.regular_user)
 
@@ -133,7 +135,9 @@ class MeetingCreateViewPermissionTest(TestCase):
         """Malformed committee IDs fail closed instead of falling back to broad create access."""
         self.client.force_login(self.chair)
 
-        response = self.client.get(f'{reverse("meetings:meeting_create")}?committee=not-a-uuid')
+        response = self.client.get(
+            f'{reverse("meetings:meeting_create")}?committee=not-a-uuid'
+        )
 
         self.assertRedirects(response, reverse("meetings:meeting_list"))
 
@@ -200,9 +204,13 @@ class MeetingResetToDraftViewTest(TestCase):
     def test_admin_can_reset_sent_meeting_to_draft(self):
         self.client.force_login(self.admin)
 
-        response = self.client.post(reverse("meetings:meeting_reset_to_draft", args=[self.meeting.pk]))
+        response = self.client.post(
+            reverse("meetings:meeting_reset_to_draft", args=[self.meeting.pk])
+        )
 
-        self.assertRedirects(response, reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        self.assertRedirects(
+            response, reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.status, "DRAFT")
         self.assertIsNotNone(self.meeting.sent_at)
@@ -210,11 +218,17 @@ class MeetingResetToDraftViewTest(TestCase):
 
     def test_reset_does_not_allow_users_without_edit_permission_to_edit_or_delete(self):
         self.client.force_login(self.admin)
-        self.client.post(reverse("meetings:meeting_reset_to_draft", args=[self.meeting.pk]))
+        self.client.post(
+            reverse("meetings:meeting_reset_to_draft", args=[self.meeting.pk])
+        )
 
         self.client.force_login(self.regular_user)
-        edit_response = self.client.get(reverse("meetings:meeting_edit", args=[self.meeting.pk]))
-        delete_response = self.client.get(reverse("meetings:meeting_delete", args=[self.meeting.pk]))
+        edit_response = self.client.get(
+            reverse("meetings:meeting_edit", args=[self.meeting.pk])
+        )
+        delete_response = self.client.get(
+            reverse("meetings:meeting_delete", args=[self.meeting.pk])
+        )
 
         self.assertRedirects(edit_response, reverse("meetings:meeting_list"))
         self.assertRedirects(delete_response, reverse("meetings:meeting_list"))
@@ -222,10 +236,14 @@ class MeetingResetToDraftViewTest(TestCase):
     def test_non_admin_cannot_reset_sent_meeting_to_draft(self):
         self.client.force_login(self.regular_user)
 
-        response = self.client.post(reverse("meetings:meeting_reset_to_draft", args=[self.meeting.pk]))
+        response = self.client.post(
+            reverse("meetings:meeting_reset_to_draft", args=[self.meeting.pk])
+        )
 
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        self.assertEqual(
+            response.url, reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.status, "SENT")
         self.assertIsNotNone(self.meeting.sent_at)
@@ -235,9 +253,13 @@ class MeetingResetToDraftViewTest(TestCase):
         self.meeting.save(update_fields=["status", "updated_at"])
         self.client.force_login(self.admin)
 
-        response = self.client.post(reverse("meetings:meeting_reset_to_draft", args=[self.meeting.pk]))
+        response = self.client.post(
+            reverse("meetings:meeting_reset_to_draft", args=[self.meeting.pk])
+        )
 
-        self.assertRedirects(response, reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        self.assertRedirects(
+            response, reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.status, "IN_PROGRESS")
 
@@ -353,7 +375,15 @@ class MeetingLiveWorkflowTest(TestCase):
         self.meeting.status = "IN_PROGRESS"
         self.meeting.actual_start_date = meeting_date
         self.meeting.actual_start_time = time(23, 30)
-        self.meeting.save(update_fields=["date", "status", "actual_start_date", "actual_start_time", "updated_at"])
+        self.meeting.save(
+            update_fields=[
+                "date",
+                "status",
+                "actual_start_date",
+                "actual_start_time",
+                "updated_at",
+            ]
+        )
 
         MeetingWorkflowService.complete_meeting(self.meeting, actor=self.chair)
 
@@ -361,28 +391,156 @@ class MeetingLiveWorkflowTest(TestCase):
         self.assertEqual(self.meeting.status, "COMPLETED")
         self.assertEqual(self.meeting.actual_end_date, completion_date)
         self.assertEqual(self.meeting.actual_end_time, time(0, 30))
-        mock_generate_from_meeting.assert_called_once_with(self.meeting, actor=self.chair)
+        mock_generate_from_meeting.assert_called_once_with(
+            self.meeting, actor=self.chair
+        )
 
     def test_live_view_requires_loaded_participant_reconfirmation(self):
         """Loaded participants must re-confirm before seeing the live shell."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
-        self.assertRedirects(response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk]))
+        self.assertRedirects(
+            response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk])
+        )
 
         participant.last_self_confirmed_at = timezone.now()
+        participant.last_written_confirmed_at = timezone.now()
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
-        participant.save(update_fields=["last_self_confirmed_at", "attendance_status", "updated_at"])
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        participant.save(
+            update_fields=[
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "attendance_status",
+                "updated_at",
+            ]
+        )
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Live-Sitzung")
         self.assertNotContains(response, "Ich bin anwesend")
         self.assertContains(response, "Zwischendurch abwesend melden")
+
+    def test_live_view_rejects_technical_confirmation_without_written_text(self):
+        """Historical technical confirmations are not enough for live access."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
+        participant.last_self_confirmed_at = timezone.now()
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.save(
+            update_fields=["last_self_confirmed_at", "attendance_status", "updated_at"]
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
+
+        self.assertRedirects(
+            response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk])
+        )
+
+    def test_live_view_rejects_participant_marked_left(self):
+        """Temporarily absent participants must re-confirm before live access."""
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
+        participant.last_self_confirmed_at = timezone.now()
+        participant.last_written_confirmed_at = timezone.now()
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_LEFT
+        participant.save(
+            update_fields=[
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "attendance_status",
+                "updated_at",
+            ]
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
+
+        self.assertRedirects(
+            response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk])
+        )
+
+    def test_reconfirm_view_requires_and_stores_written_confirmation(self):
+        """The re-confirmation page collects the written attendance statement."""
+        from apps.participants.services import WRITTEN_CONFIRMATION_MAX_LENGTH
+
+        self.meeting.status = "IN_PROGRESS"
+        self.meeting.save(update_fields=["status", "updated_at"])
+        self.client.force_login(self.user)
+
+        get_response = self.client.get(
+            reverse("meetings:meeting_reconfirm", args=[self.meeting.pk])
+        )
+        self.assertContains(get_response, "Schriftliche Anwesenheitsbestätigung")
+        self.assertEqual(
+            get_response.context["written_confirmation_max_length"],
+            WRITTEN_CONFIRMATION_MAX_LENGTH,
+        )
+        self.assertContains(
+            get_response, f'maxlength="{WRITTEN_CONFIRMATION_MAX_LENGTH}"'
+        )
+
+        invalid_response = self.client.post(
+            reverse("meetings:meeting_reconfirm", args=[self.meeting.pk]),
+            {"password": "testpass123", "written_confirmation": "   "},
+        )
+        self.assertEqual(invalid_response.status_code, 400)
+        self.assertEqual(
+            invalid_response.context["written_confirmation_max_length"],
+            WRITTEN_CONFIRMATION_MAX_LENGTH,
+        )
+
+        max_length_response = self.client.post(
+            reverse("meetings:meeting_reconfirm", args=[self.meeting.pk]),
+            {
+                "password": "testpass123",
+                "written_confirmation": "x" * (WRITTEN_CONFIRMATION_MAX_LENGTH + 1),
+            },
+        )
+        self.assertEqual(max_length_response.status_code, 400)
+        self.assertContains(max_length_response, "maximal 500 Zeichen", status_code=400)
+
+        response = self.client.post(
+            reverse("meetings:meeting_reconfirm", args=[self.meeting.pk]),
+            {
+                "password": "testpass123",
+                "written_confirmation": "Ich bestätige meine persönliche Anwesenheit.",
+            },
+        )
+
+        self.assertRedirects(
+            response, reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
+        self.assertIsNotNone(participant.last_written_confirmed_at)
+        self.assertEqual(
+            participant.attendance_events.latest("occurred_at").written_confirmation,
+            "Ich bestätige meine persönliche Anwesenheit.",
+        )
 
     def test_live_partials_require_loaded_participant_reconfirmation(self):
         """HTMX live partials must not bypass meeting re-confirmation."""
@@ -390,40 +548,65 @@ class MeetingLiveWorkflowTest(TestCase):
         self.meeting.save(update_fields=["status", "updated_at"])
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live_status", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live_status", args=[self.meeting.pk])
+        )
 
-        self.assertRedirects(response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk]))
+        self.assertRedirects(
+            response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk])
+        )
 
     def test_absent_participant_without_substitute_cannot_enter_live_meeting(self):
         """A planned-absent original member must not re-enter and vote without being restored."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.status = MeetingParticipant.STATUS_ABSENT
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["status", "attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.save(
+            update_fields=[
+                "status",
+                "attendance_status",
+                "last_self_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
-        self.assertRedirects(response, reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        self.assertRedirects(
+            response, reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
 
     def test_detail_buttons_are_permission_aware_and_start_enters_reconfirm(self):
         """Only the chair sees start, and starting sends users to re-confirmation."""
         self.client.force_login(self.user)
-        response = self.client.get(reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
 
         self.assertNotContains(response, "Sitzung starten")
 
         self.client.force_login(self.chair)
-        response = self.client.get(reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
 
         self.assertContains(response, "Sitzung starten")
 
-        response = self.client.post(reverse("meetings:meeting_start", args=[self.meeting.pk]))
+        response = self.client.post(
+            reverse("meetings:meeting_start", args=[self.meeting.pk])
+        )
 
-        self.assertRedirects(response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk]))
+        self.assertRedirects(
+            response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk])
+        )
 
     def test_completed_meeting_hides_and_blocks_agenda_mutations(self):
         """Completed meetings must not expose or allow TOP edit/delete actions."""
@@ -432,7 +615,9 @@ class MeetingLiveWorkflowTest(TestCase):
         self.meeting.save(update_fields=["status", "actual_end_time", "updated_at"])
         self.client.force_login(self.chair)
 
-        response = self.client.get(reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
 
         update_url = reverse("agendas:item_update", args=[self.agenda_item.pk])
         delete_url = reverse("agendas:item_delete", args=[self.agenda_item.pk])
@@ -443,8 +628,12 @@ class MeetingLiveWorkflowTest(TestCase):
         update_response = self.client.get(update_url)
         delete_response = self.client.get(delete_url)
 
-        self.assertRedirects(update_response, reverse("meetings:meeting_detail", args=[self.meeting.pk]))
-        self.assertRedirects(delete_response, reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        self.assertRedirects(
+            update_response, reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
+        self.assertRedirects(
+            delete_response, reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
 
     def test_meeting_detail_links_current_protocol_and_meeting_scoped_items(self):
         """Meeting detail links direct protocol and in-meeting elections/resolutions only."""
@@ -467,7 +656,7 @@ class MeetingLiveWorkflowTest(TestCase):
         resolution = Resolution.objects.create(
             committee=self.committee,
             title="Budget freigeben",
-            proposal="Der Betriebsrat beschließt das Budget.",
+            description="Der Betriebsrat beschließt das Budget.",
             status="PROPOSED",
             created_by=self.chair,
         )
@@ -479,16 +668,24 @@ class MeetingLiveWorkflowTest(TestCase):
         self.meeting.save(update_fields=["status", "updated_at"])
         self.client.force_login(self.chair)
 
-        response = self.client.get(reverse("meetings:meeting_detail", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_detail", args=[self.meeting.pk])
+        )
 
-        self.assertContains(response, reverse("protocols:protocol_detail", args=[protocol.pk]))
+        self.assertContains(
+            response, reverse("protocols:protocol_detail", args=[protocol.pk])
+        )
         self.assertContains(response, "Protokoll öffnen")
         self.assertNotContains(response, "bi-journals")
         self.assertContains(response, "#meeting-elections")
         self.assertContains(response, "#meeting-resolutions")
-        self.assertContains(response, reverse("elections:election_detail", args=[election.pk]))
-        self.assertContains(response, reverse("resolutions:resolution_detail", args=[resolution.pk]))
-        self.assertContains(response, "<strong>3</strong> Budget freigeben", html=True)
+        self.assertContains(
+            response, reverse("elections:election_detail", args=[election.pk])
+        )
+        self.assertContains(
+            response, reverse("resolutions:resolution_detail", args=[resolution.pk])
+        )
+        self.assertContains(response, "<strong>3.</strong> Budget freigeben", html=True)
         self.assertNotContains(response, "<strong>XXX</strong>")
 
     def test_meeting_list_groups_by_status_not_date(self):
@@ -531,25 +728,54 @@ class MeetingLiveWorkflowTest(TestCase):
             membership=self.chair_membership,
         )
         chair_participant.last_self_confirmed_at = timezone.now()
-        chair_participant.save(update_fields=["last_self_confirmed_at", "updated_at"])
+        chair_participant.last_written_confirmed_at = timezone.now()
+        chair_participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        chair_participant.save(
+            update_fields=[
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "attendance_status",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.chair)
 
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
         self.assertContains(response, "Aktivieren")
 
         response = self.client.post(
-            reverse("meetings:meeting_set_current_item", args=[self.meeting.pk, self.agenda_item.pk])
+            reverse(
+                "meetings:meeting_set_current_item",
+                args=[self.meeting.pk, self.agenda_item.pk],
+            )
         )
-        self.assertRedirects(response, reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        self.assertRedirects(
+            response, reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.current_agenda_item, self.agenda_item)
 
-        clerk_participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        clerk_participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         clerk_participant.last_self_confirmed_at = timezone.now()
-        clerk_participant.save(update_fields=["last_self_confirmed_at", "updated_at"])
+        clerk_participant.last_written_confirmed_at = timezone.now()
+        clerk_participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        clerk_participant.save(
+            update_fields=[
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "attendance_status",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
         self.assertContains(response, "Notiz")
 
@@ -557,14 +783,29 @@ class MeetingLiveWorkflowTest(TestCase):
         """Live refresh uses an event stream and never self-polls editable fragments."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.save(
+            update_fields=[
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "attendance_status",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
-        self.assertContains(response, reverse("meetings:meeting_live_events", args=[self.meeting.pk]))
+        self.assertContains(
+            response, reverse("meetings:meeting_live_events", args=[self.meeting.pk])
+        )
         self.assertContains(response, "data-live-events")
         self.assertContains(response, "EventSource")
         self.assertContains(response, "suppressAgendaRefreshUntil")
@@ -574,7 +815,9 @@ class MeetingLiveWorkflowTest(TestCase):
         self.assertContains(response, "br-live-refresh-agenda")
         self.assertContains(response, 'hx-trigger="br-live-refresh-agenda from:body"')
         self.assertContains(response, 'hx-trigger="br-live-refresh-status from:body"')
-        self.assertContains(response, 'hx-trigger="br-live-refresh-participants from:body"')
+        self.assertContains(
+            response, 'hx-trigger="br-live-refresh-participants from:body"'
+        )
         self.assertNotContains(response, 'hx-trigger="load, br-live-refresh')
         self.assertNotContains(response, "data-live-version-poller")
         self.assertNotContains(response, "every 5s")
@@ -585,14 +828,35 @@ class MeetingLiveWorkflowTest(TestCase):
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = self.agenda_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.save(
+            update_fields=[
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "attendance_status",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
-        self.assertContains(response, 'hx-post="' + reverse("protocols:agenda_item_note_update", args=[self.meeting.pk, self.agenda_item.pk]) + '"')
+        self.assertContains(
+            response,
+            'hx-post="'
+            + reverse(
+                "protocols:agenda_item_note_update",
+                args=[self.meeting.pk, self.agenda_item.pk],
+            )
+            + '"',
+        )
         self.assertContains(response, 'hx-target="#live-agenda"')
         self.assertContains(response, 'hx-swap="outerHTML"')
 
@@ -608,14 +872,29 @@ class MeetingLiveWorkflowTest(TestCase):
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = self.agenda_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.save(
+            update_fields=[
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "attendance_status",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
-        self.assertContains(response, f'aria-label="Formatierbare Notiz zu {other_item.title}"')
+        self.assertContains(
+            response, f'aria-label="Formatierbare Notiz zu {other_item.title}"'
+        )
         self.assertContains(response, "data-quill-editor")
         self.assertContains(response, "data-quill-wrapper")
         self.assertContains(response, "protocol-quill-field")
@@ -629,13 +908,25 @@ class MeetingLiveWorkflowTest(TestCase):
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = self.agenda_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live_events", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live_events", args=[self.meeting.pk])
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["Content-Type"], "text/event-stream")
@@ -651,27 +942,48 @@ class MeetingLiveWorkflowTest(TestCase):
         self.client.force_login(self.user)
 
         response = self.client.post(
-            reverse("protocols:agenda_item_note_update", args=[self.meeting.pk, self.agenda_item.pk]),
+            reverse(
+                "protocols:agenda_item_note_update",
+                args=[self.meeting.pk, self.agenda_item.pk],
+            ),
             {"body": "<p>Nicht bestätigt</p>"},
         )
 
-        self.assertRedirects(response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk]))
+        self.assertRedirects(
+            response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk])
+        )
         protocol = Protocol.objects.filter(meeting=self.meeting).first()
-        self.assertFalse(protocol and protocol.item_notes.filter(agenda_item=self.agenda_item).exists())
+        self.assertFalse(
+            protocol
+            and protocol.item_notes.filter(agenda_item=self.agenda_item).exists()
+        )
 
     def test_live_note_hx_post_returns_updated_agenda_fragment(self):
         """Saving a live note over HTMX returns the agenda fragment with formatted content."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = self.agenda_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
         response = self.client.post(
-            reverse("protocols:agenda_item_note_update", args=[self.meeting.pk, self.agenda_item.pk]),
+            reverse(
+                "protocols:agenda_item_note_update",
+                args=[self.meeting.pk, self.agenda_item.pk],
+            ),
             {"body": "<p><strong>Formatierte Notiz</strong></p>"},
             HTTP_HX_REQUEST="true",
         )
@@ -681,26 +993,47 @@ class MeetingLiveWorkflowTest(TestCase):
         self.assertIn("br-live-updated", response.headers.get("HX-Trigger"))
         self.assertIn("version", response.headers.get("HX-Trigger"))
         self.assertContains(response, 'id="live-agenda"')
-        self.assertContains(response, "&lt;p&gt;&lt;strong&gt;Formatierte Notiz&lt;/strong&gt;&lt;/p&gt;", html=False)
+        self.assertContains(
+            response,
+            "&lt;p&gt;&lt;strong&gt;Formatierte Notiz&lt;/strong&gt;&lt;/p&gt;",
+            html=False,
+        )
 
     def test_live_version_changes_after_note_update(self):
         """Other clients can detect actual live changes through the compact version endpoint."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = self.agenda_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
-        before = self.client.get(reverse("meetings:meeting_live_version", args=[self.meeting.pk])).json()["version"]
+        before = self.client.get(
+            reverse("meetings:meeting_live_version", args=[self.meeting.pk])
+        ).json()["version"]
 
         self.client.post(
-            reverse("protocols:agenda_item_note_update", args=[self.meeting.pk, self.agenda_item.pk]),
+            reverse(
+                "protocols:agenda_item_note_update",
+                args=[self.meeting.pk, self.agenda_item.pk],
+            ),
             {"body": "<p>Neue Version</p>"},
             HTTP_HX_REQUEST="true",
         )
-        after = self.client.get(reverse("meetings:meeting_live_version", args=[self.meeting.pk])).json()["version"]
+        after = self.client.get(
+            reverse("meetings:meeting_live_version", args=[self.meeting.pk])
+        ).json()["version"]
 
         self.assertNotEqual(before, after)
 
@@ -708,14 +1041,27 @@ class MeetingLiveWorkflowTest(TestCase):
         """Activating a TOP over HTMX updates live fragments without a full reload."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
-        chair_participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.chair_membership)
+        chair_participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.chair_membership
+        )
         chair_participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         chair_participant.last_self_confirmed_at = timezone.now()
-        chair_participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        chair_participant.last_written_confirmed_at = timezone.now()
+        chair_participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.chair)
 
         response = self.client.post(
-            reverse("meetings:meeting_set_current_item", args=[self.meeting.pk, self.agenda_item.pk]),
+            reverse(
+                "meetings:meeting_set_current_item",
+                args=[self.meeting.pk, self.agenda_item.pk],
+            ),
             HTTP_HX_REQUEST="true",
         )
 
@@ -738,12 +1084,24 @@ class MeetingLiveWorkflowTest(TestCase):
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = self.agenda_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
-        response = self.client.get(reverse("meetings:meeting_live_events", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live_events", args=[self.meeting.pk])
+        )
         events = response.streaming_content
         first_event = next(events).decode()
 
@@ -759,23 +1117,42 @@ class MeetingLiveWorkflowTest(TestCase):
         """Other clients must detect TOP activation even when only current TOP changes."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
-        chair_participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.chair_membership)
+        chair_participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.chair_membership
+        )
         chair_participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         chair_participant.last_self_confirmed_at = timezone.now()
-        chair_participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        chair_participant.last_written_confirmed_at = timezone.now()
+        chair_participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.chair)
-        before = self.client.get(reverse("meetings:meeting_live_version", args=[self.meeting.pk])).json()["version"]
+        before = self.client.get(
+            reverse("meetings:meeting_live_version", args=[self.meeting.pk])
+        ).json()["version"]
 
         self.client.post(
-            reverse("meetings:meeting_set_current_item", args=[self.meeting.pk, self.agenda_item.pk]),
+            reverse(
+                "meetings:meeting_set_current_item",
+                args=[self.meeting.pk, self.agenda_item.pk],
+            ),
             HTTP_HX_REQUEST="true",
         )
-        after = self.client.get(reverse("meetings:meeting_live_version", args=[self.meeting.pk])).json()["version"]
+        after = self.client.get(
+            reverse("meetings:meeting_live_version", args=[self.meeting.pk])
+        ).json()["version"]
 
         self.assertNotEqual(before, after)
         self.assertIn(str(self.agenda_item.pk), after)
 
-    def test_protocol_detail_note_post_requires_reconfirmation_during_live_meeting(self):
+    def test_protocol_detail_note_post_requires_reconfirmation_during_live_meeting(
+        self,
+    ):
         """The protocol detail endpoint must not bypass live note re-confirmation."""
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
@@ -791,8 +1168,12 @@ class MeetingLiveWorkflowTest(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk]))
-        self.assertFalse(protocol.item_notes.filter(agenda_item=self.agenda_item).exists())
+        self.assertRedirects(
+            response, reverse("meetings:meeting_reconfirm", args=[self.meeting.pk])
+        )
+        self.assertFalse(
+            protocol.item_notes.filter(agenda_item=self.agenda_item).exists()
+        )
 
     def test_non_clerk_agenda_editor_cannot_edit_live_notes_or_results(self):
         """Agenda edit permission alone must not grant protocol-note or legal result editing."""
@@ -807,26 +1188,44 @@ class MeetingLiveWorkflowTest(TestCase):
         resolution = Resolution.objects.create(
             committee=self.committee,
             title="Beschluss nur Protokollführung",
-            proposal="Text",
+            description="Text",
             created_by=self.chair,
             status="PROPOSED",
         )
-        ResolutionAgendaItem.objects.create(agenda_item=resolution_item, resolution=resolution)
+        ResolutionAgendaItem.objects.create(
+            agenda_item=resolution_item, resolution=resolution
+        )
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = resolution_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        chair_participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.chair_membership)
+        chair_participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.chair_membership
+        )
         chair_participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         chair_participant.last_self_confirmed_at = timezone.now()
-        chair_participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        chair_participant.last_written_confirmed_at = timezone.now()
+        chair_participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.chair)
 
         note_response = self.client.post(
-            reverse("protocols:agenda_item_note_update", args=[self.meeting.pk, self.agenda_item.pk]),
+            reverse(
+                "protocols:agenda_item_note_update",
+                args=[self.meeting.pk, self.agenda_item.pk],
+            ),
             {"body": "<p>Agenda-Editor-Notiz</p>"},
         )
         result_response = self.client.post(
-            reverse("meetings:meeting_record_resolution_result", args=[self.meeting.pk, resolution_item.pk]),
+            reverse(
+                "meetings:meeting_record_resolution_result",
+                args=[self.meeting.pk, resolution_item.pk],
+            ),
             {
                 "yes_votes": "1",
                 "no_votes": "0",
@@ -836,10 +1235,17 @@ class MeetingLiveWorkflowTest(TestCase):
             },
         )
 
-        self.assertRedirects(note_response, reverse("meetings:meeting_live", args=[self.meeting.pk]))
-        self.assertRedirects(result_response, reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        self.assertRedirects(
+            note_response, reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
+        self.assertRedirects(
+            result_response, reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
         protocol = Protocol.objects.filter(meeting=self.meeting).first()
-        self.assertFalse(protocol and protocol.item_notes.filter(agenda_item=self.agenda_item).exists())
+        self.assertFalse(
+            protocol
+            and protocol.item_notes.filter(agenda_item=self.agenda_item).exists()
+        )
         resolution.refresh_from_db()
         self.assertEqual(resolution.yes_votes, 0)
         self.assertEqual(resolution.decision_text, "")
@@ -917,17 +1323,31 @@ class MeetingLiveWorkflowTest(TestCase):
         )
         self.meeting.status = "IN_PROGRESS"
         self.meeting.save(update_fields=["status", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live_status", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live_status", args=[self.meeting.pk])
+        )
 
         self.assertContains(response, "Aktuell anwesend: 1")
 
-    def test_resolution_result_form_uses_decision_editor_and_single_quorum_checkbox(self):
+    def test_resolution_result_form_uses_decision_editor_and_single_quorum_checkbox(
+        self,
+    ):
         """Live resolution recording shows Beschlussfassung and no override reason fields."""
         self.meeting.status = "DRAFT"
         self.meeting.save(update_fields=["status", "updated_at"])
@@ -940,23 +1360,41 @@ class MeetingLiveWorkflowTest(TestCase):
         resolution = Resolution.objects.create(
             committee=self.committee,
             title="Beschluss TOP",
-            proposal="Text",
+            description="Text",
             created_by=self.chair,
             status="PROPOSED",
         )
-        ResolutionAgendaItem.objects.create(agenda_item=resolution_item, resolution=resolution)
+        ResolutionAgendaItem.objects.create(
+            agenda_item=resolution_item, resolution=resolution
+        )
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = resolution_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
+        participant.save(
+            update_fields=[
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "attendance_status",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse("meetings:meeting_live", args=[self.meeting.pk]))
+        response = self.client.get(
+            reverse("meetings:meeting_live", args=[self.meeting.pk])
+        )
 
         self.assertContains(response, "Beschlussfassung")
-        self.assertContains(response, f'aria-label="Formatierbare Beschlussfassung zu {resolution_item.title}"')
+        self.assertContains(
+            response,
+            f'aria-label="Formatierbare Beschlussfassung zu {resolution_item.title}"',
+        )
         self.assertContains(response, ">Beschlussfähig<")
         self.assertNotContains(response, "Beschlussfähig laut Vorschlag/Prüfung")
         self.assertNotContains(response, "Beschlussfähigkeit manuell setzen")
@@ -973,18 +1411,33 @@ class MeetingLiveWorkflowTest(TestCase):
             sort_order=2,
         )
         election = Election.objects.create(agenda_item=election_item)
-        candidate = ElectionCandidate.objects.create(election=election, name="Kandidat A", sort_order=1)
+        candidate = ElectionCandidate.objects.create(
+            election=election, name="Kandidat A", sort_order=1
+        )
         self.meeting.status = "IN_PROGRESS"
         self.meeting.current_agenda_item = election_item
         self.meeting.save(update_fields=["status", "current_agenda_item", "updated_at"])
-        participant = MeetingParticipant.objects.get(meeting=self.meeting, membership=self.membership)
+        participant = MeetingParticipant.objects.get(
+            meeting=self.meeting, membership=self.membership
+        )
         participant.attendance_status = MeetingParticipant.ATTENDANCE_PRESENT
         participant.last_self_confirmed_at = timezone.now()
-        participant.save(update_fields=["attendance_status", "last_self_confirmed_at", "updated_at"])
+        participant.last_written_confirmed_at = timezone.now()
+        participant.save(
+            update_fields=[
+                "attendance_status",
+                "last_self_confirmed_at",
+                "last_written_confirmed_at",
+                "updated_at",
+            ]
+        )
         self.client.force_login(self.user)
 
         response = self.client.post(
-            reverse("meetings:meeting_record_election_result", args=[self.meeting.pk, election_item.pk]),
+            reverse(
+                "meetings:meeting_record_election_result",
+                args=[self.meeting.pk, election_item.pk],
+            ),
             {
                 f"candidate_{candidate.pk}": "1",
                 f"elected_{candidate.pk}": "on",
@@ -1014,7 +1467,9 @@ class MeetingLiveWorkflowTest(TestCase):
             created_by=self.chair,
             status="DRAFT",
         )
-        foreign_item = other_meeting.agenda.items.create(title="Fremder TOP", sort_order=1)
+        foreign_item = other_meeting.agenda.items.create(
+            title="Fremder TOP", sort_order=1
+        )
 
         self.meeting.current_agenda_item = foreign_item
 
