@@ -227,6 +227,12 @@
                     </div>
                     {% endif %}
                 </form>
+
+                {% if election_seat_distribution %}
+                    <div class="mt-4">
+                        {% include "committees/includes/election_seat_distribution_card.html" with election_seat_distribution=election_seat_distribution show_detail_link=True %}
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

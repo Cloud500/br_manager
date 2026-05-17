@@ -204,9 +204,24 @@
                     {% endif %}
                 </div>
             </div>
+
         </div>
 
         <div class="col-md-4">
+            {% if show_seat_distribution_link %}
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-table"></i> Wahlergebnis</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">Sitzverteilung und Listenplätze für dieses Hauptgremium anzeigen.</p>
+                    <a href="{% url 'committees:seat_distribution' committee.pk %}" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="bi bi-box-arrow-up-right"></i> Sitzverteilung öffnen
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="card mb-3">
                 <div class="card-header">
                     <h6 class="mb-0">Statistik</h6>

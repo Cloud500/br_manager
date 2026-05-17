@@ -9,6 +9,7 @@ from django.views import View
 from django.views.generic import FormView
 
 from apps.meetings.models import Meeting
+from apps.committees.seat_distribution import get_election_seat_distribution
 from apps.participants.forms import (
     AddParticipantForm,
     MarkAbsentForm,
@@ -186,6 +187,9 @@ class ParticipantMarkAbsentView(ParticipantActionMixin):
         context["suggested_substitute"] = getattr(form, "suggested_substitute", None)
         context["user_can_manage_participant_substitutes"] = can_manage_substitutes
         context["minority_info"] = self.get_minority_info(participant)
+        context["committee"] = participant.meeting.committee
+        if participant.meeting.committee.committee_type == "MAIN":
+            context["election_seat_distribution"] = get_election_seat_distribution(participant.meeting.committee)
         return context
 
     def get_minority_info(self, participant: MeetingParticipant) -> dict | None:
