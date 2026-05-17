@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+
+{% block title %}2FA Einrichten - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-shield-lock"></i> Zwei-Faktor-Authentifizierung einrichten
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i>
+                    {% if twofa_required %}
+                        <strong>Pflichtschritt:</strong> Als Administrator müssen Sie die Zwei-Faktor-Authentifizierung einrichten.
+                        <br><strong>Schritt 1:</strong> Scannen Sie den QR-Code mit Ihrer Authenticator-App
+                        (z.B. Google Authenticator, Authy, Microsoft Authenticator).
+                    {% else %}
+                        <strong>Schritt 1:</strong> Scannen Sie den QR-Code mit Ihrer Authenticator-App
+                        (z.B. Google Authenticator, Authy, Microsoft Authenticator).
+                    {% endif %}
+                </div>
+                
+                <div class="text-center my-4">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={{ totp_uri|urlencode }}" 
+                         alt="2FA QR Code" 
+                         class="img-fluid border p-2">
+                </div>
+                
+                <div class="alert alert-secondary">
+                    <strong>Manueller Schlüssel:</strong><br>
+                    Wenn Sie den QR-Code nicht scannen können, geben Sie diesen Schlüssel manuell ein:
+                    <br>
+                    <code class="fs-5">{{ totp_secret }}</code>
+                </div>
+                
+                <hr>
+                
+                <div class="alert alert-warning">
+                    <i class="bi bi-info-circle"></i>
+                    <strong>Schritt 2:</strong> Geben Sie den 6-stelligen Code aus Ihrer App ein, um die Einrichtung abzuschließen.
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="code" class="form-label">Bestätigungscode:</label>
+                        <input type="text" 
+                               class="form-control form-control-lg text-center" 
+                               id="code" 
+                               name="code" 
+                               placeholder="000000"
+                               maxlength="6"
+                               pattern="[0-9]{6}"
+                               required
+                               autofocus>
+                        <small class="form-text text-muted">
+                            6-stelliger Code aus Ihrer Authenticator-App
+                        </small>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-check-circle"></i> 2FA aktivieren
+                        </button>
+                        {% if not twofa_required %}
+                        <a href="{% url 'accounts:profile' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Später einrichten
+                        </a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-submit when 6 digits entered
+    document.getElementById('code').addEventListener('input', function(e) {
+        if (e.target.value.length === 6) {
+            // Small delay for better UX
+            setTimeout(() => {
+                if (e.target.value.length === 6) {
+                    e.target.form.submit();
+                }
+            }, 300);
+        }
+    });
+</script>
+{% endblock %}

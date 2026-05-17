@@ -1,0 +1,216 @@
+{% extends 'base.html' %}
+
+{% block title %}Profil - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <h1><i class="bi bi-person-circle"></i> Mein Profil</h1>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="{% url 'accounts:profile_update' %}" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> Profil bearbeiten
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-badge"></i> Persönliche Informationen
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Name:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.get_full_name|default:"Nicht angegeben" }}
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Vorname:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.first_name|default:"Nicht angegeben" }}
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Nachname:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.last_name|default:"Nicht angegeben" }}
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>E-Mail:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.email }}
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Geschlecht:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.get_gender_display|default:"Nicht angegeben" }}
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Telefon:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.phone|default:"Nicht angegeben" }}
+                    </div>
+                </div>
+                
+                <hr class="my-3">
+                <h6 class="text-muted">Zusätzliche Informationen</h6>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Abteilung:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {% if user.profile.department %}
+                            <span class="badge bg-secondary">{{ user.profile.department }}</span>
+                        {% else %}
+                            <span class="text-muted">Nicht angegeben</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Mitarbeiter-ID:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.profile.employee_id|default:"Nicht angegeben" }}
+                    </div>
+                </div>
+                
+                <hr class="my-3">
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Beigetreten:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {{ user.date_joined|date:"d.m.Y H:i" }} Uhr
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <strong>Status:</strong>
+                    </div>
+                    <div class="col-md-9">
+                        {% if user.is_active %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle"></i> Aktiv
+                            </span>
+                        {% else %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-x-circle"></i> Inaktiv
+                            </span>
+                        {% endif %}
+                        {% if user.is_superuser %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-star"></i> Administrator
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-gear"></i> Sicherheitseinstellungen
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6><i class="bi bi-shield-lock"></i> Zwei-Faktor-Authentifizierung</h6>
+                {% if user.two_factor_enabled %}
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle"></i>
+                        2FA ist aktiviert ({{ user.get_two_factor_method_display }})
+                    </div>
+                    <p class="mb-2">
+                        <i class="bi bi-key"></i> <strong>Recovery-Codes:</strong> {{ recovery_codes_count }} verfügbar
+                        {% if recovery_codes_count <= 2 %}
+                            <span class="badge bg-warning">Niedrig!</span>
+                        {% endif %}
+                    </p>
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'accounts:2fa_recovery_codes' %}" class="btn btn-primary">
+                            <i class="bi bi-key"></i> Recovery-Codes verwalten
+                        </a>
+                        <form method="post" action="{% url 'accounts:2fa_disable' %}" 
+                              onsubmit="return confirm('Möchten Sie 2FA wirklich deaktivieren?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger w-100">
+                                <i class="bi bi-shield-x"></i> 2FA deaktivieren
+                            </button>
+                        </form>
+                    </div>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        2FA ist nicht aktiviert. Aktivieren Sie 2FA für zusätzliche Sicherheit.
+                    </div>
+                    <div class="d-grid">
+                        <a href="{% url 'accounts:2fa_setup' %}" class="btn btn-success">
+                            <i class="bi bi-shield-plus"></i> 2FA jetzt aktivieren
+                        </a>
+                    </div>
+                {% endif %}
+                
+                <hr>
+                
+                <h6><i class="bi bi-key"></i> Passwort</h6>
+                <p class="text-muted small">Ändern Sie Ihr Passwort regelmäßig für mehr Sicherheit.</p>
+                <a href="{% url 'accounts:password_change' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-key"></i> Passwort ändern
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock-history"></i> Letzte Aktivität
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if user.last_login %}
+                    <p>
+                        <strong>Letzter Login:</strong><br>
+                        {{ user.last_login|date:"d.m.Y H:i" }} Uhr
+                    </p>
+                {% else %}
+                    <p class="text-muted">
+                        Noch kein Login erfolgt
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - BR-Manager{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </h1>
+        <p class="lead">Willkommen, {{ user.get_full_name }}!</p>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-person-badge text-primary"></i> Profil
+                </h5>
+                <p class="card-text">Persönliche Daten und Passwort verwalten.</p>
+                <a href="{% url 'accounts:profile' %}" class="btn btn-primary">
+                    <i class="bi bi-arrow-right"></i> Zum Profil
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-shield-lock text-success"></i> 2FA
+                </h5>
+                <p class="card-text">Zwei-Faktor-Authentifizierung einrichten oder prüfen.</p>
+                <a href="{% url 'accounts:2fa_setup' %}" class="btn btn-success">
+                    <i class="bi bi-arrow-right"></i> Zu 2FA
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-tools text-info"></i> Admin
+                </h5>
+                <p class="card-text">Nur für Administratoren verfügbar.</p>
+                <a href="/admin/" class="btn btn-info {% if not user.is_superuser and not user.is_staff %}disabled{% endif %}">
+                    <i class="bi bi-arrow-right"></i> Zum Admin
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-folder text-warning"></i> Zukunft
+                </h5>
+                <p class="card-text">Weitere Module können später ergänzt werden.</p>
+                <a href="#" class="btn btn-warning disabled">
+                    <i class="bi bi-arrow-right"></i> Demnächst
+                </a>
+                <small class="text-muted d-block mt-2">Coming soon</small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
