@@ -1,0 +1,386 @@
+================================================================================
+  BR-MANAGER TEST DATA - CREATED USERS
+================================================================================
+Generated: 2026-05-13 13:27:12
+Total Users: 58 (1 Admin + 57 Regular Users)
+
+================================================================================
+  LOGIN CREDENTIALS (SAME FOR ALL USERS)
+================================================================================
+Password:     testpass123
+2FA Method:   TOTP (Authenticator App)
+TOTP Secret:  BRMANAGERDEV2FATESTKEY234567
+Current Code: 025747 (valid for 18s)
+
+To add to Authenticator App:
+  1. Open your Authenticator (Google Authenticator, Authy, etc.)
+  2. Select "Enter a setup key" or "Manual entry"
+  3. Enter name: "BR-Manager DEV"
+  4. Enter key:  BRMANAGERDEV2FATESTKEY234567
+  5. Save - you can now use this for ALL test users!
+
+================================================================================
+  ADMIN USER
+================================================================================
+Email:      admin@example.org
+Name:       Admin User
+Type:       Superuser (Staff)
+Department: IT
+Employee:   ADMIN-001
+
+================================================================================
+  REGULAR USERS (57)
+================================================================================
+
+1. Celal Jäkel
+   Email:      celal.jaekel@example.org
+   Gender:     Männlich
+   Department: Produktion
+   Employee:   EMP-4219
+
+2. Reinhart Hentschel
+   Email:      reinhart.hentschel@example.org
+   Gender:     Männlich
+   Department: Personalabteilung
+   Employee:   EMP-1718
+
+3. Hüseyin Wernecke
+   Email:      hueseyin.wernecke@example.org
+   Gender:     Männlich
+   Department: IT
+   Employee:   EMP-9610
+
+4. Hanni Schüler
+   Email:      hanni.schueler@example.org
+   Gender:     Männlich
+   Department: Produktion
+   Employee:   EMP-6662
+
+5. Hans Jürgen Schmiedt
+   Email:      hans-juergen.schmiedt@example.org
+   Gender:     Männlich
+   Department: IT
+   Employee:   EMP-4290
+
+6. Mehmet Stiebitz
+   Email:      mehmet.stiebitz@example.org
+   Gender:     Männlich
+   Department: Qualitätssicherung
+   Employee:   EMP-898
+
+7. Hans-Peter Atzler
+   Email:      hans-peter.atzler@example.org
+   Gender:     Männlich
+   Department: Finanzen
+   Employee:   EMP-669
+
+8. Edelbert Steinberg
+   Email:      edelbert.steinberg@example.org
+   Gender:     Männlich
+   Department: Finanzen
+   Employee:   EMP-9287
+
+9. Jiri Bolnbach
+   Email:      jiri.bolnbach@example.org
+   Gender:     Männlich
+   Department: Finanzen
+   Employee:   EMP-8605
+
+10. Reimer Misicher
+   Email:      reimer.misicher@example.org
+   Gender:     Männlich
+   Department: IT
+   Employee:   EMP-4679
+
+11. Wladimir Köster
+   Email:      wladimir.koester@example.org
+   Gender:     Männlich
+   Department: Qualitätssicherung
+   Employee:   EMP-571
+
+12. Abbas Adler
+   Email:      abbas.adler@example.org
+   Gender:     Männlich
+   Department: Qualitätssicherung
+   Employee:   EMP-4819
+
+13. Winfried Schwital
+   Email:      winfried.schwital@example.org
+   Gender:     Männlich
+   Department: IT
+   Employee:   EMP-7792
+
+14. Oskar Paffrath
+   Email:      oskar.paffrath@example.org
+   Gender:     Männlich
+   Department: Einkauf
+   Employee:   EMP-8873
+
+15. Clemens Bärer
+   Email:      clemens.baerer@example.org
+   Gender:     Männlich
+   Department: Produktion
+   Employee:   EMP-475
+
+16. Charles Rogge
+   Email:      charles.rogge@example.org
+   Gender:     Männlich
+   Department: Qualitätssicherung
+   Employee:   EMP-8127
+
+17. Carl-Heinz Wulff
+   Email:      carl-heinz.wulff@example.org
+   Gender:     Männlich
+   Department: Vertrieb
+   Employee:   EMP-6144
+
+18. Ivo Kobelt
+   Email:      ivo.kobelt@example.org
+   Gender:     Männlich
+   Department: Marketing
+   Employee:   EMP-1867
+
+19. Arndt van der Dussen
+   Email:      arndt.van-der-dussen@example.org
+   Gender:     Männlich
+   Department: Personalabteilung
+   Employee:   EMP-7579
+
+20. Karl-Wilhelm Drubin
+   Email:      karl-wilhelm.drubin@example.org
+   Gender:     Männlich
+   Department: Qualitätssicherung
+   Employee:   EMP-6972
+
+21. Ferenc Lehmann
+   Email:      ferenc.lehmann@example.org
+   Gender:     Männlich
+   Department: Vertrieb
+   Employee:   EMP-2649
+
+22. Heinz-Georg Patberg
+   Email:      heinz-georg.patberg@example.org
+   Gender:     Männlich
+   Department: Produktion
+   Employee:   EMP-708
+
+23. Betina Keudel
+   Email:      betina.keudel@example.org
+   Gender:     Weiblich
+   Department: Qualitätssicherung
+   Employee:   EMP-9777
+
+24. Milka Förster
+   Email:      milka.foerster@example.org
+   Gender:     Weiblich
+   Department: Personalabteilung
+   Employee:   EMP-9517
+
+25. Edda Meyer
+   Email:      edda.meyer@example.org
+   Gender:     Weiblich
+   Department: Personalabteilung
+   Employee:   EMP-2649
+
+26. Swetlana Budig
+   Email:      swetlana.budig@example.org
+   Gender:     Weiblich
+   Department: Qualitätssicherung
+   Employee:   EMP-2637
+
+27. Melanie Mälzer
+   Email:      melanie.maelzer@example.org
+   Gender:     Weiblich
+   Department: Personalabteilung
+   Employee:   EMP-5741
+
+28. Herma Cichorius
+   Email:      herma.cichorius@example.org
+   Gender:     Weiblich
+   Department: Einkauf
+   Employee:   EMP-1529
+
+29. Ingelore Eckbauer
+   Email:      ingelore.eckbauer@example.org
+   Gender:     Weiblich
+   Department: Finanzen
+   Employee:   EMP-1296
+
+30. Sabrina Schulz
+   Email:      sabrina.schulz@example.org
+   Gender:     Weiblich
+   Department: Personalabteilung
+   Employee:   EMP-7372
+
+31. Marit Niemeier
+   Email:      marit.niemeier@example.org
+   Gender:     Weiblich
+   Department: Produktion
+   Employee:   EMP-6035
+
+32. Anny Davids
+   Email:      anny.davids@example.org
+   Gender:     Weiblich
+   Department: Vertrieb
+   Employee:   EMP-2053
+
+33. Sabine Wähner
+   Email:      sabine.waehner@example.org
+   Gender:     Weiblich
+   Department: Einkauf
+   Employee:   EMP-1597
+
+34. Milka Zahn
+   Email:      milka.zahn@example.org
+   Gender:     Weiblich
+   Department: Marketing
+   Employee:   EMP-2507
+
+35. Rosa-Maria Girschner
+   Email:      rosa-maria.girschner@example.org
+   Gender:     Weiblich
+   Department: IT
+   Employee:   EMP-5842
+
+36. Elisa Gotthard
+   Email:      elisa.gotthard@example.org
+   Gender:     Weiblich
+   Department: Vertrieb
+   Employee:   EMP-4210
+
+37. Renata Binner
+   Email:      renata.binner@example.org
+   Gender:     Weiblich
+   Department: Finanzen
+   Employee:   EMP-9731
+
+38. Rosalia Schlosser
+   Email:      rosalia.schlosser@example.org
+   Gender:     Weiblich
+   Department: Personalabteilung
+   Employee:   EMP-9477
+
+39. Krystyna Radisch
+   Email:      krystyna.radisch@example.org
+   Gender:     Weiblich
+   Department: Marketing
+   Employee:   EMP-472
+
+40. Traude Renner
+   Email:      traude.renner@example.org
+   Gender:     Weiblich
+   Department: Finanzen
+   Employee:   EMP-9741
+
+41. Waltraut Peukert
+   Email:      waltraut.peukert@example.org
+   Gender:     Weiblich
+   Department: Vertrieb
+   Employee:   EMP-4369
+
+42. Theresia Kabus
+   Email:      theresia.kabus@example.org
+   Gender:     Weiblich
+   Department: Marketing
+   Employee:   EMP-2669
+
+43. Romy Metz
+   Email:      romy.metz@example.org
+   Gender:     Weiblich
+   Department: Finanzen
+   Employee:   EMP-7243
+
+44. Annedore Buchholz
+   Email:      annedore.buchholz@example.org
+   Gender:     Weiblich
+   Department: Vertrieb
+   Employee:   EMP-9099
+
+45. Jacqueline Stey
+   Email:      jacqueline.stey@example.org
+   Gender:     Weiblich
+   Department: Qualitätssicherung
+   Employee:   EMP-5133
+
+46. Manja Kraus
+   Email:      manja.kraus@example.org
+   Gender:     Weiblich
+   Department: Produktion
+   Employee:   EMP-470
+
+47. Dorothea Henk
+   Email:      dorothea.henk@example.org
+   Gender:     Weiblich
+   Department: IT
+   Employee:   EMP-588
+
+48. Käthi Hentschel
+   Email:      kaethi.hentschel@example.org
+   Gender:     Weiblich
+   Department: Produktion
+   Employee:   EMP-5913
+
+49. Annita Schinke
+   Email:      annita.schinke@example.org
+   Gender:     Weiblich
+   Department: Einkauf
+   Employee:   EMP-6795
+
+50. Elly Hermighausen
+   Email:      elly.hermighausen@example.org
+   Gender:     Weiblich
+   Department: Personalabteilung
+   Employee:   EMP-7811
+
+51. Christiana Vollbrecht
+   Email:      christiana.vollbrecht@example.org
+   Gender:     Weiblich
+   Department: Finanzen
+   Employee:   EMP-4222
+
+52. Olav Jacobi Jäckel
+   Email:      olav.jacobi-jaeckel@example.org
+   Gender:     Weiblich
+   Department: Marketing
+   Employee:   EMP-6026
+
+53. Antoinette Gnatz
+   Email:      antoinette.gnatz@example.org
+   Gender:     Weiblich
+   Department: Personalabteilung
+   Employee:   EMP-2133
+
+54. Hans-Karl Faust
+   Email:      hans-karl.faust@example.org
+   Gender:     Männlich
+   Department: Marketing
+   Employee:   EMP-8914
+
+55. Anna Kaul
+   Email:      anna.kaul@example.org
+   Gender:     Weiblich
+   Department: Qualitätssicherung
+   Employee:   EMP-134
+
+56. Ingolf Täsche
+   Email:      ingolf.taesche@example.org
+   Gender:     Männlich
+   Department: IT
+   Employee:   EMP-8993
+
+57. Kornelia Scholz
+   Email:      kornelia.scholz@example.org
+   Gender:     Weiblich
+   Department: Personalabteilung
+   Employee:   EMP-2593
+
+================================================================================
+  NOTES
+================================================================================
+- All users have 2FA enabled with the SAME TOTP secret
+- Use the same authenticator code for ALL users
+- Each user has 10 recovery codes (stored hashed in database)
+- To reset: python manage.py seed_testdata --clear
+
+This file is auto-generated and will be overwritten on next seed.
+================================================================================
