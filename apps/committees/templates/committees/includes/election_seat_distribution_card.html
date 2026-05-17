@@ -1,0 +1,75 @@
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-table"></i> Sitzverteilung nach Wahlergebnis
+        </h5>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary">{{ committee.total_seats }} Sitze</span>
+            {% if show_detail_link %}
+                <a href="{% url 'committees:seat_distribution' committee.pk %}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-box-arrow-up-right"></i> Öffnen
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body">
+        <p class="small text-muted mb-3">
+            Die Sitznummern werden über alle Listen hinweg nach Stimmenzahl vergeben.
+            Nur die ersten {{ committee.total_seats }} Plätze erhalten eine Sitznummer; weitere Personen bleiben ohne Sitznummer.
+        </p>
+
+        {% if election_seat_distribution %}
+            <div class="d-flex flex-nowrap gap-3 overflow-auto pb-2 align-items-start" style="max-height: 70vh;">
+                {% for list_group in election_seat_distribution %}
+                    <div class="flex-shrink-0" style="min-width: 420px; max-width: 520px;">
+                        <div class="border rounded">
+                            <div class="bg-light px-3 py-2 border-bottom d-flex justify-content-between align-items-center">
+                                <strong>{{ list_group.list_name }}</strong>
+                                <span class="badge bg-light text-dark border">{{ list_group.rows|length }} Personen</span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 90px;">Listenplatz</th>
+                                            <th>Name</th>
+                                            <th style="width: 120px;">Geschlecht</th>
+                                            <th class="text-end" style="width: 110px;">Stimmen</th>
+                                            <th class="text-end" style="width: 120px;">Sitz</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in list_group.rows %}
+                                            <tr>
+                                                <td>{{ row.membership.election_list_position|default:"-" }}</td>
+                                                <td>
+                                                    <strong>{{ row.membership.user.get_full_name }}</strong>
+                                                    {% if row.membership.member_type == 'SUBSTITUTE' %}
+                                                        <span class="badge bg-warning text-dark ms-2">Ersatzmitglied</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td>{{ row.membership.user.get_gender_display }}</td>
+                                                <td class="text-end">{{ row.membership.election_votes|default:"-" }}</td>
+                                                <td class="text-end">
+                                                    {% if row.seat_number %}
+                                                        <span class="badge bg-success">Sitz {{ row.seat_number }}</span>
+                                                    {% else %}
+                                                        <span class="text-muted">-</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle"></i> Für dieses Gremium sind noch keine Wahldaten hinterlegt.
+            </div>
+        {% endif %}
+    </div>
+</div>

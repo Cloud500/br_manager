@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Sitzverteilung Verwaltung{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">Sitzverteilung Verwaltung</h1>
+            <p class="text-muted mb-0">Wahlergebnis-Übersicht für aktive Hauptgremien.</p>
+        </div>
+    </div>
+
+    {% if committee_seat_distributions %}
+        {% for item in committee_seat_distributions %}
+            <h2 class="h5 mb-3">{{ item.committee.name }}</h2>
+            {% include "committees/includes/election_seat_distribution_card.html" with committee=item.committee election_seat_distribution=item.groups show_detail_link=True %}
+        {% endfor %}
+    {% else %}
+        <div class="alert alert-info">Keine Hauptgremien vorhanden.</div>
+    {% endif %}
+</div>
+{% endblock %}

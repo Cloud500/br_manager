@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Sitzverteilung - {{ committee.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_list' %}">Gremien</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'committees:committee_detail' committee.pk %}">{{ committee.name }}</a></li>
+            <li class="breadcrumb-item active">Sitzverteilung</li>
+        </ol>
+    </nav>
+
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h2">Sitzverteilung</h1>
+            <p class="text-muted mb-0">{{ committee.name }}</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'committees:committee_detail' committee.pk %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Zurück zum Gremium
+            </a>
+        </div>
+    </div>
+
+    {% include "committees/includes/election_seat_distribution_card.html" with election_seat_distribution=election_seat_distribution show_detail_link=False %}
+</div>
+{% endblock %}

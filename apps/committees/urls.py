@@ -7,6 +7,9 @@ from apps.committees import views
 app_name = 'committees'
 
 urlpatterns = [
+    path('seat-distribution/', views.SeatDistributionOverviewView.as_view(), name='seat_distribution_overview'),
+    path('<uuid:committee_id>/seat-distribution/', views.CommitteeSeatDistributionView.as_view(), name='seat_distribution'),
+    
     # Committee URLs
     path('', views.CommitteeListView.as_view(), name='committee_list'),
     path('create/', views.CommitteeCreateView.as_view(), name='committee_create'),

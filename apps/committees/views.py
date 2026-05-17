@@ -1,10 +1,9 @@
 """Views for committees app."""
 
-from typing import Any
-
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Q, QuerySet
+from django.http import Http404
 from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import (
@@ -19,7 +18,7 @@ from django.views.generic import (
 from apps.committees.forms import CommitteeForm, CommitteeUpdateForm, MembershipForm
 from apps.committees.mixins import CommitteeContextMixin, CommitteePermissionMixin
 from apps.committees.models import Committee, Membership
-from apps.committees.utils import get_substitute_suggestions
+from apps.committees.seat_distribution import get_election_seat_distribution
 
 
 class CommitteeListView(LoginRequiredMixin, CommitteePermissionMixin, ListView):
@@ -112,7 +111,69 @@ class CommitteeDetailView(
         # Show all regular and external members on overview
         context['regular_members'] = committee.get_active_members()
         context['external_members'] = committee.get_external_members()
+        context['show_seat_distribution_link'] = committee.committee_type == 'MAIN'
         
+        return context
+
+
+class SeatDistributionOverviewView(LoginRequiredMixin, CommitteePermissionMixin, ListView):
+    """Display election seat distribution cards for visible committees."""
+
+    model = Committee
+    template_name = 'committees/seat_distribution_overview.html'
+    context_object_name = 'committees'
+    required_permission = 'committee.view_members'
+
+    def get_queryset(self) -> QuerySet:
+        """Return active main committees visible to the current user."""
+        base_queryset = Committee.objects.filter(
+            is_active=True,
+            committee_type='MAIN',
+        ).select_related('parent')
+        if self.has_view_all_permission():
+            return base_queryset.order_by('name')
+        allowed_committees = self.get_user_committees_with_children()
+        return base_queryset.filter(
+            id__in=allowed_committees.values_list('id', flat=True)
+        ).order_by('name')
+
+    def get_context_data(self, **kwargs) -> dict:
+        """Add precomputed seat distributions for rendering."""
+        context = super().get_context_data(**kwargs)
+        context['committee_seat_distributions'] = [
+            {
+                'committee': committee,
+                'groups': get_election_seat_distribution(committee),
+            }
+            for committee in context['committees']
+        ]
+        return context
+
+
+class CommitteeSeatDistributionView(
+    LoginRequiredMixin,
+    CommitteePermissionMixin,
+    CommitteeContextMixin,
+    DetailView,
+):
+    """Display election seat distribution for one committee."""
+
+    model = Committee
+    template_name = 'committees/seat_distribution_detail.html'
+    context_object_name = 'committee'
+    required_permission = 'committee.view_members'
+
+    def get_object(self, queryset=None):
+        """Return main committee from the committee_id URL parameter."""
+        committee = self.get_committee()
+        if committee.committee_type != 'MAIN':
+            raise Http404('Sitzverteilungen sind nur für Hauptgremien verfügbar.')
+        return committee
+
+    def get_context_data(self, **kwargs) -> dict:
+        """Add election seat distribution rows."""
+        context = super().get_context_data(**kwargs)
+        context['election_seat_distribution'] = get_election_seat_distribution(self.object)
         return context
 
 
@@ -637,6 +698,8 @@ class MemberReplaceView(
             'all_substitutes': all_substitutes,
             'minority_info': minority_info,
         }
+        if committee.committee_type == 'MAIN':
+            context['election_seat_distribution'] = get_election_seat_distribution(committee)
         
         return render(request, self.template_name, context)
     
